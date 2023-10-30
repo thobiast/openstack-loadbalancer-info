@@ -1,0 +1,2 @@
+openstacksdk
+rich
