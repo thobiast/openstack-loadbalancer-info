@@ -578,7 +578,8 @@ class AmphoraInfo(LoadBalancerInfo):
             f"lb_network_ip:[green]{amphora.lb_network_ip} [/]"
             f"img:[magenta]{AmphoraInfo.images_name.get(amphora.image_id, 'N/A')}[/] "
             f"server:[magenta]{server.id}[/] "
-            f"([magenta]{server.compute_host}[/])"
+            f"vm_flavor:[magenta]{server.flavor.name}[/] "
+            f"compute host:([magenta]{server.compute_host}[/])"
         )
         if self.details:
             add_all_attr_to_tree(amphora, amphora_tree)
