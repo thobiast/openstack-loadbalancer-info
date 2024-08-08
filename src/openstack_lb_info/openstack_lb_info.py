@@ -76,6 +76,15 @@ def parse_parameters():
         "--tags", help="Filter load balancers tags", type=str, required=False
     )
     parser.add_argument(
+        "--flavor-id", help="Filter load balancers flavor id", type=str, required=False
+    )
+    parser.add_argument(
+        "--vip-address",
+        help="Filter load balancers VIP address",
+        type=str,
+        required=False,
+    )
+    parser.add_argument(
         "--availability-zone", help="Filter load balancers AZ", type=str, required=False
     )
     parser.add_argument(
@@ -622,6 +631,8 @@ def query_openstack_lbs(os_conn, args):
         "availability_zone": args.availability_zone,
         "vip_network_id": args.vip_network_id,
         "vip_subnet_id": args.vip_subnet_id,
+        "flavor_id": args.flavor_id,
+        "vip_address": args.vip_address,
     }
     if args.id:
         # Add the "id" key to the filter criteria only if specified
