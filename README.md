@@ -40,6 +40,7 @@ and optional details. If no amphoras match the filter criteria, it will indicate
 
 ```bash
 $ usage: openstack-lb-info [-h] --type {lb,amphora} [--name NAME] [--id ID] [--tags TAGS]
+                           [--flavor-id FLAVOR_ID] [--vip-address VIP_ADDRESS]
                            [--availability-zone AVAILABILITY_ZONE]
 						   [--vip-network-id VIP_NETWORK_ID]
                            [--vip-subnet-id VIP_SUBNET_ID] [--details]
@@ -52,6 +53,10 @@ options:
   --name NAME           Filter load balancers name
   --id ID               Filter load balancers id
   --tags TAGS           Filter load balancers tags
+  --flavor-id FLAVOR_ID
+                        Filter load balancers flavor id
+  --vip-address VIP_ADDRESS
+                        Filter load balancers VIP address
   --availability-zone AVAILABILITY_ZONE
                         Filter load balancers AZ
   --vip-network-id VIP_NETWORK_ID

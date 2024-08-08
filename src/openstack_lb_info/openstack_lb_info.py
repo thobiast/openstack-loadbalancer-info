@@ -76,6 +76,15 @@ def parse_parameters():
         "--tags", help="Filter load balancers tags", type=str, required=False
     )
     parser.add_argument(
+        "--flavor-id", help="Filter load balancers flavor id", type=str, required=False
+    )
+    parser.add_argument(
+        "--vip-address",
+        help="Filter load balancers VIP address",
+        type=str,
+        required=False,
+    )
+    parser.add_argument(
         "--availability-zone", help="Filter load balancers AZ", type=str, required=False
     )
     parser.add_argument(
@@ -569,7 +578,8 @@ class AmphoraInfo(LoadBalancerInfo):
             f"lb_network_ip:[green]{amphora.lb_network_ip} [/]"
             f"img:[magenta]{AmphoraInfo.images_name.get(amphora.image_id, 'N/A')}[/] "
             f"server:[magenta]{server.id}[/] "
-            f"([magenta]{server.compute_host}[/])"
+            f"vm_flavor:[magenta]{server.flavor.name}[/] "
+            f"compute host:([magenta]{server.compute_host}[/])"
         )
         if self.details:
             add_all_attr_to_tree(amphora, amphora_tree)
@@ -622,6 +632,8 @@ def query_openstack_lbs(os_conn, args):
         "availability_zone": args.availability_zone,
         "vip_network_id": args.vip_network_id,
         "vip_subnet_id": args.vip_subnet_id,
+        "flavor_id": args.flavor_id,
+        "vip_address": args.vip_address,
     }
     if args.id:
         # Add the "id" key to the filter criteria only if specified
