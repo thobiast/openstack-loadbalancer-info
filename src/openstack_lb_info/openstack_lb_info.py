@@ -153,8 +153,10 @@ def add_all_attr_to_tree(obj, tree):
         tree (rich.tree.Tree): The Rich tree to which the attributes will be added.
     """
     highlighter = ReprHighlighter()
-    for attr in sorted(obj):
-        tree.add(highlighter(str(f"{attr}: {getattr(obj, attr)}")))
+    obj_dict = obj.to_dict()
+    for attr in sorted(obj_dict):
+        value = obj_dict[attr]
+        tree.add(highlighter(f"{attr}: {value}"))
 
 
 class OpenStackAPI:
