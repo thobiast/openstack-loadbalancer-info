@@ -662,8 +662,7 @@ def main():
     args = parse_parameters()
 
     openstack.enable_logging(debug=False)
-    parser = argparse.ArgumentParser()
-    os_conn = openstack.connect(options=parser)
+    os_conn = openstack.connect()
 
     filtered_lbs = query_openstack_lbs(os_conn, args)
 
