@@ -3,11 +3,13 @@
 """
 A Python script to display OpenStack Load Balancer details.
 
-This script query an OpenStack environment to present detailed information about
-load balancers, including their components such as listeners, pools,
-health monitors, members, and amphorae. It uses the OpenStack SDK and Rich library
-for structured and colorful presentation, allowing for a comprehensive view of
-the load balancing resources.
+This script query an OpenStack environment to present detailed information
+about load balancers, including their components such as listeners, pools,
+health monitors, members, and amphorae. It connects to an OpenStack
+environment using the OpenStack SDK and presents the information in a
+structured and user-friendly format. The script supports multiple output
+formats, including plain text, and JSON, Rich text (with colors and styling),
+allowing for a comprehensive view of the load balancing resources.
 
 Example of use:
 
@@ -27,13 +29,26 @@ Example of use:
 For additional usage and options, please refer to the script's command-line help:
 $ openstack-lb-info --help
 """
+
 import argparse
+import contextlib
+import ipaddress
+import json
+import re
 import sys
+import uuid
+from abc import ABC, abstractmethod
 
 import openstack
-from rich.console import Console
-from rich.highlighter import ReprHighlighter
-from rich.tree import Tree
+
+try:
+    from rich.console import Console
+    from rich.highlighter import ReprHighlighter
+    from rich.tree import Tree
+
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
 
 
 ###########################################################################
@@ -61,20 +76,23 @@ def parse_parameters():
     )
 
     parser.add_argument(
+        "-o",
+        "--output-format",
+        help="Output format: 'plain', 'rich' or 'json'",
+        choices=("plain", "rich", "json"),
+        default="rich",
+        required=False,
+    )
+    parser.add_argument(
+        "-t",
         "--type",
         help="Show information about load balancers or amphoras",
         choices=("lb", "amphora"),
         required=True,
     )
-    parser.add_argument(
-        "--name", help="Filter load balancers name", type=str, required=False
-    )
-    parser.add_argument(
-        "--id", help="Filter load balancers id", type=str, required=False
-    )
-    parser.add_argument(
-        "--tags", help="Filter load balancers tags", type=str, required=False
-    )
+    parser.add_argument("--name", help="Filter load balancers name", type=str, required=False)
+    parser.add_argument("--id", help="Filter load balancers id", type=str, required=False)
+    parser.add_argument("--tags", help="Filter load balancers tags", type=str, required=False)
     parser.add_argument(
         "--flavor-id", help="Filter load balancers flavor id", type=str, required=False
     )
@@ -110,53 +128,253 @@ def parse_parameters():
         parser.print_help()
         sys.exit(0)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    validate_arguments(args, parser)
+
+    return args
 
 
-def fmt_status(status):
+def validate_arguments(args, parser):
     """
-    Format a status string with rich text color.
-
-    This function formats a status string using rich text color codes.
-    The colors are applied based on the status value:
-
-    - Green for "ACTIVE" or "ONLINE" status.
-    - Yellow for "PENDING" status.
-    - Red for all other status values.
+    Validate command-line arguments.
 
     Args:
-        status (str): The status to be formatted.
+        args (argparse.Namespace): Parsed command-line arguments.
+        parser (argparse.ArgumentParser): Argument parser instance.
+
+    Raises:
+        SystemExit: If validation fails, the parser exits the script.
+    """
+    # Validate UUIDs parameters
+    uuid_args = ["id", "vip_network_id", "vip_subnet_id", "flavor_id"]
+    for arg_name in uuid_args:
+        arg_value = getattr(args, arg_name)
+        if arg_value and not is_valid_uuid(arg_value):
+            parser.error(f"Invalid {arg_name.replace('_', '-')} format. Expected a UUID.")
+
+    # Validate IP address
+    if args.vip_address and not is_valid_ip_address(args.vip_address):
+        parser.error("Invalid VIP address format. Expected a valid IP address.")
+
+
+def is_valid_uuid(uuid_str):
+    """
+    Check if uuid_str parameter is a valid UUID.
+
+    Args:
+        uuid_str (str): The value to check.
 
     Returns:
-        str: The formatted status string with rich text color and the color-closing tag.
+        bool: True if valid UUID, False otherwise.
     """
-    status_colors = {
-        "ACTIVE": "green",
-        "ONLINE": "green",
-        "PENDING": "yellow",
-    }
-
-    color = status_colors.get(status, "red")
-    return f"[{color}]{status}[/{color}]"
+    try:
+        uuid.UUID(str(uuid_str))
+        return True
+    except ValueError:
+        return False
 
 
-def add_all_attr_to_tree(obj, tree):
+def is_valid_ip_address(address):
     """
-    Add all attributes of an object to a Rich tree.
-
-    This function iterates through all the attributes of a given Python object and
-    adds them to a Rich tree. Each attribute is displayed in the
-    format "attribute_name: value".
+    Check if the parameter is a valid IP address.
 
     Args:
-        obj (object): The Python object whose attributes are to be added to the tree.
-        tree (rich.tree.Tree): The Rich tree to which the attributes will be added.
+        address (str): The IP address to validate.
+
+    Returns:
+        bool: True if valid IP address, False otherwise.
     """
-    highlighter = ReprHighlighter()
-    obj_dict = obj.to_dict()
-    for attr in sorted(obj_dict):
-        value = obj_dict[attr]
-        tree.add(highlighter(f"{attr}: {value}"))
+    try:
+        ipaddress.ip_address(address)
+        return True
+    except ValueError:
+        return False
+
+
+class OutputFormatter(ABC):
+    """Abstract base class for output formatters."""
+
+    @abstractmethod
+    def create_tree(self, name):
+        """Create a tree structure for the output."""
+
+    @abstractmethod
+    def add_to_tree(self, tree, content):
+        """Add content to the tree structure."""
+
+    @abstractmethod
+    def print_tree(self, tree):
+        """Print the tree structure."""
+
+    @abstractmethod
+    def print(self, message):
+        """Print a message."""
+
+    @abstractmethod
+    def status(self, message):
+        """Display a status message."""
+
+    @abstractmethod
+    def line(self):
+        """Print a line separator."""
+
+    @abstractmethod
+    def rule(self, title, align="center"):
+        """Print a rule with a title."""
+
+    @abstractmethod
+    def format_status(self, status):
+        """Format status text."""
+
+
+class RichOutputFormatter(OutputFormatter):
+    """Formatter using the Rich library."""
+
+    def __init__(self):
+        self.console = Console()
+        self.highlighter = ReprHighlighter()
+
+    def create_tree(self, name):
+        return Tree(name)
+
+    def add_to_tree(self, tree, content, highlight=False):
+        if highlight:
+            content = self.highlighter(content)
+        return tree.add(content)
+
+    def print_tree(self, tree):
+        self.console.print(tree)
+
+    def print(self, message):
+        self.console.print(message)
+
+    def status(self, message):
+        return self.console.status(message)
+
+    def line(self):
+        self.console.line()
+
+    def rule(self, title, align="center"):
+        self.console.rule(title, align=align)
+
+    def format_message(self, message):
+        """Return the message as-is, preserving Rich formatting."""
+        return message
+
+    def format_status(self, status):
+        status_colors = {
+            "ACTIVE": "green",
+            "ONLINE": "green",
+            "PENDING": "yellow",
+        }
+        color = status_colors.get(status, "red")
+        return f"[{color}]{status}[/{color}]"
+
+
+class PlainOutputFormatter(OutputFormatter):
+    """Formatter for plain text output."""
+
+    def create_tree(self, name):
+        return {"name": name, "children": []}
+
+    def add_to_tree(self, tree, content, highlight=False):
+        _ = highlight
+        child_tree = {"name": self.format_message(content), "children": []}
+        tree["children"].append(child_tree)
+        return child_tree
+
+    def print_tree(self, tree, level=0):
+        indent = "    " * level
+        print(f"{indent}{self.format_message(tree['name'])}")
+        for child in tree.get("children", []):
+            self.print_tree(child, level + 1)
+
+    def print(self, message):
+        print(self.format_message(message))
+
+    def status(self, message):
+        @contextlib.contextmanager
+        def plain_status():
+            # Remove Rich formatting codes from the message
+            clean_message = self.format_message(message)
+            print(f"[STATUS] {clean_message}")
+            try:
+                yield
+            finally:
+                print(f"[STATUS] Completed: {clean_message}")
+
+        return plain_status()
+
+    def line(self):
+        print()
+
+    def rule(self, title, align="center"):
+        title = self.format_message(title)
+        print(f"{title}")
+        print("-" * len(title))
+
+    def format_message(self, message):
+        """Remove Rich text formatting tags from a message."""
+        clean_message = re.sub(r"\[\/?[^\]]+\]", "", message)
+        return clean_message
+
+    def format_status(self, status):
+        return status
+
+
+class JSONOutputFormatter(OutputFormatter):
+    """Formatter for JSON output."""
+
+    def __init__(self):
+        self.data = None
+
+    def create_tree(self, name):
+        # Remove Rich codes
+        clean_name = self.format_message(name)
+        self.data = {"name": clean_name, "children": []}
+        return self.data
+
+    def add_to_tree(self, tree, content, highlight=False):
+        _ = highlight
+        # Remove Rich codes
+        clean_content = self.format_message(content)
+        # Create a new node and add it to the tree's children
+        child = {"name": clean_content, "children": []}
+        tree["children"].append(child)
+        return child
+
+    def print_tree(self, tree):
+        print(json.dumps(tree, indent=4))
+
+    def print(self, message):
+        # Remove Rich codes
+        clean_message = self.format_message(message)
+        # Not show empty prints
+        if not clean_message:
+            return
+        # For consistency, wrap messages in a dict
+        output = {"message": clean_message}
+        print(json.dumps(output, indent=4))
+
+    def status(self, message):
+        return contextlib.nullcontext()
+
+    def line(self):
+        pass
+
+    def rule(self, title, align="center"):
+        pass
+
+    def format_status(self, status):
+        return status
+
+    def format_message(self, message):
+        """Remove Rich text formatting tags from a message."""
+        if isinstance(message, str):
+            clean_message = re.sub(r"\[\/?[^\]]+\]", "", message)
+            return clean_message
+        return message
 
 
 class OpenStackAPI:
@@ -173,7 +391,7 @@ class OpenStackAPI:
         Initialize the OpenStackAPI instance.
 
         Args:
-            os_conn (openstack.connection.Connection)
+            os_conn (openstack.connection.Connection): OpenStack connection.
         """
         self.os_conn = os_conn
 
@@ -300,13 +518,12 @@ class LoadBalancerInfo:
 
     Args:
         os_conn (openstack.connection.Connection): An established OpenStack connection.
-        lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): The OpenStack Load
-            Balancer for which information is to be displayed.
-        details (bool): A boolean flag indicating whether to display detailed
-            attributes of the Load Balancer.
+        lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): The LB object.
+        details (bool): Whether to display detailed attributes of the Load Balancer.
+        formatter (OutputFormatter): Formatter instance for output.
     """
 
-    def __init__(self, os_conn, lb, details):
+    def __init__(self, os_conn, lb, details, formatter):
         """
         Initialize a LoadBalancerInfo instance.
 
@@ -314,29 +531,30 @@ class LoadBalancerInfo:
             os_conn (openstack.connection.Connection)
             lb (openstack.load_balancer.v2.load_balancer.LoadBalancer)
             details (bool)
+            formatter (OutputFormatter): Formatter instance.
         """
         self.lb = lb
         self.details = details
-        self.console = Console()
+        self.formatter = formatter
         self.lb_tree = None
         self.openstack_api = OpenStackAPI(os_conn)
 
     def create_lb_tree(self):
         """
-        Create a Rich Tree representing Load Balancer information.
+        Create a tree representing Load Balancer information.
 
         Returns:
-            Tree: A Rich Tree object representing Load Balancer information.
+            Tree: A tree object representing Load Balancer information.
         """
-        self.lb_tree = Tree(
+        self.lb_tree = self.formatter.create_tree(
             f"LB:[bright_yellow] {self.lb.id}[/] "
             f"vip:[bright_cyan]{self.lb.vip_address}[/] "
-            f"prov_status:{fmt_status(self.lb.provisioning_status)} "
-            f"oper_status:{fmt_status(self.lb.operating_status)} "
+            f"prov_status:{self.formatter.format_status(self.lb.provisioning_status)} "
+            f"oper_status:{self.formatter.format_status(self.lb.operating_status)} "
             f"tags:[magenta]{self.lb.tags}[/]"
         )
         if self.details:
-            add_all_attr_to_tree(self.lb, self.lb_tree)
+            self.add_all_attr_to_tree(self.lb, self.lb_tree)
 
         return self.lb_tree
 
@@ -345,44 +563,38 @@ class LoadBalancerInfo:
         Add information about a Health Monitor to a Pool tree.
 
         Args:
-            pool_tree (rich.tree.Tree): The Rich Tree representing the Pool to which the
-                Health Monitor information will be added.
-            health_monitor_id (str): The ID of the Health Monitor to retrieve and
-                display.
+            pool_tree: The tree representing the Pool.
+            health_monitor_id (str): The ID of the Health Monitor.
 
         Returns:
             None
         """
-        with self.console.status(
-            f"Getting health monitor details id [b]{health_monitor_id}[/b]"
-        ):
-            health_monitor = self.openstack_api.retrieve_health_monitor(
-                health_monitor_id
-            )
+        with self.formatter.status(f"Getting health monitor details id [b]{health_monitor_id}[/b]"):
+            health_monitor = self.openstack_api.retrieve_health_monitor(health_monitor_id)
 
         if health_monitor:
-            health_monitor_tree = pool_tree.add(
+            health_monitor_tree = self.formatter.add_to_tree(
+                pool_tree,
                 f"[b green]Health Monitor:[/] [b white]{health_monitor.id}[/] "
                 f"type:[magenta]{health_monitor.type}[/magenta] "
                 f"http_method:[magenta]{health_monitor.http_method}[/magenta] "
                 f"http_codes:[magenta]{health_monitor.expected_codes}[/magenta] "
                 f"url_path:[magenta]{health_monitor.url_path}[/magenta] "
-                f"prov_status:{fmt_status(health_monitor.provisioning_status)} "
-                f"oper_status:{fmt_status(health_monitor.operating_status)}"
+                f"prov_status:{self.formatter.format_status(health_monitor.provisioning_status)} "
+                f"oper_status:{self.formatter.format_status(health_monitor.operating_status)}",
             )
 
             if self.details:
-                add_all_attr_to_tree(health_monitor, health_monitor_tree)
+                self.add_all_attr_to_tree(health_monitor, health_monitor_tree)
         else:
-            pool_tree.add("[b green]Health Monitor:[/] None")
+            self.formatter.add_to_tree(pool_tree, "[b green]Health Monitor:[/] None")
 
     def add_pool_members(self, pool_tree, pool_id, pool_members):
         """
         Add information about Members of a Pool to the Pool tree.
 
         Args:
-            pool_tree (rich.tree.Tree): The Rich Tree representing the Pool to which the
-                Member information will be added.
+            pool_tree: The tree representing the Pool.
             pool_id (str): The ID of the Pool for which to retrieve Member information.
             pool_members (list): A list of dictionaries containing Member information,
                 where each dictionary includes the Member's ID and additional details.
@@ -391,58 +603,57 @@ class LoadBalancerInfo:
             None
         """
         for member in pool_members:
-            with self.console.status(
-                f"Getting member details id [b]{member['id']}[/b]"
-            ):
+            with self.formatter.status(f"Getting member details id [b]{member['id']}[/b]"):
                 os_m = self.openstack_api.retrieve_member(member["id"], pool_id)
 
-            member_tree = pool_tree.add(
+            member_tree = self.formatter.add_to_tree(
+                pool_tree,
                 f"[b green]Member:[/] [b white]{os_m.id}[/] "
                 f"IP:[magenta]{os_m.address}[/magenta] "
                 f"port:[magenta]{os_m.protocol_port}[/magenta] "
                 f"weight:[magenta]{os_m.weight}[/magenta] "
                 f"backup:[magenta]{os_m.backup}[/magenta] "
-                f"prov_status:{fmt_status(os_m.provisioning_status)} "
-                f"oper_status:{fmt_status(os_m.operating_status)}"
+                f"prov_status:{self.formatter.format_status(os_m.provisioning_status)} "
+                f"oper_status:{self.formatter.format_status(os_m.operating_status)}",
             )
 
             if self.details:
-                add_all_attr_to_tree(os_m, member_tree)
+                self.add_all_attr_to_tree(os_m, member_tree)
 
     def add_pool_info(self, tree, pool_id):
         """
         Add information about a Pool to the Load Balancer tree.
 
         Args:
-            tree (rich.tree.Tree): The Rich Tree representing the Load Balancer to which
-                the Pool information will be added.
+            tree: The tree representing the Load Balancer.
             pool_id (str): The ID of the Pool for which to retrieve and display.
 
         Returns:
             None
         """
-        with self.console.status(f"Getting pool details id [b]{pool_id}[/b]"):
+        with self.formatter.status(f"Getting pool details id [b]{pool_id}[/b]"):
             pool = self.openstack_api.retrieve_pool(pool_id)
 
-        pool_tree = tree.add(
+        pool_tree = self.formatter.add_to_tree(
+            tree,
             f"[b green]Pool:[/] [b white]{pool.id}[/] "
             f"protocol:[magenta]{pool.protocol}[/magenta] "
             f"algorithm:[magenta]{pool.lb_algorithm}[/magenta] "
-            f"prov_status:{fmt_status(pool.provisioning_status)} "
-            f"oper_status:{fmt_status(pool.operating_status)} "
+            f"prov_status:{self.formatter.format_status(pool.provisioning_status)} "
+            f"oper_status:{self.formatter.format_status(pool.operating_status)} ",
         )
         if self.details:
-            add_all_attr_to_tree(pool, pool_tree)
+            self.add_all_attr_to_tree(pool, pool_tree)
 
         if pool.health_monitor_id:
             self.add_health_monitor_info(pool_tree, pool.health_monitor_id)
         else:
-            pool_tree.add("[b green]Health Monitor:[/] None")
+            self.formatter.add_to_tree(pool_tree, "[b green]Health Monitor:[/] None")
 
         if pool.members:
             self.add_pool_members(pool_tree, pool.id, pool.members)
         else:
-            pool_tree.add("[b green]Member:[/] None")
+            self.formatter.add_to_tree(pool_tree, "[b green]Member:[/] None")
 
     def add_listener_info(self, listener_id):
         """
@@ -455,26 +666,45 @@ class LoadBalancerInfo:
         Returns:
             None
         """
-        with self.console.status(
+        with self.formatter.status(
             f"Getting listener details for loadbalancers "
             f"[b]{self.lb.id}[/b] listener: [b]{listener_id}[/b]"
         ):
             listener = self.openstack_api.retrieve_listener(listener_id)
 
-        listener_tree = self.lb_tree.add(
+        listener_tree = self.formatter.add_to_tree(
+            self.lb_tree,
             f"[b green]Listener:[/] [b white]{listener.id}[/] "
             f"([blue b]{listener.name}[/]) "
             f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
-            f"prov_status:{fmt_status(listener.provisioning_status)} "
-            f"oper_status:{fmt_status(listener.operating_status)} "
+            f"prov_status:{self.formatter.format_status(listener.provisioning_status)} "
+            f"oper_status:{self.formatter.format_status(listener.operating_status)} ",
         )
         if self.details:
-            add_all_attr_to_tree(listener, listener_tree)
+            self.add_all_attr_to_tree(listener, listener_tree)
 
         if listener.default_pool_id:
             self.add_pool_info(listener_tree, listener.default_pool_id)
         else:
-            listener_tree.add("[b green]Pool:[/] None")
+            self.formatter.add_to_tree(listener_tree, "[b green]Pool:[/] None")
+
+    def add_all_attr_to_tree(self, obj, tree):
+        """
+        Add all attributes of an object to a tree.
+
+        This function iterates through all the attributes of a given Python object and
+        adds them to a Rich tree. Each attribute is displayed in the
+        format "attribute_name: value".
+
+        Args:
+            obj (object): The object whose attributes are to be added.
+            tree: The tree to which the attributes will be added.
+        """
+        obj_dict = obj.to_dict()
+        for attr in sorted(obj_dict):
+            value = obj_dict[attr]
+            content = f"{attr}: {value}"
+            self.formatter.add_to_tree(tree, content, highlight=True)
 
     def display_lb_info(self):
         """
@@ -486,17 +716,17 @@ class LoadBalancerInfo:
         self.create_lb_tree()
 
         if not self.lb.listeners:
-            self.lb_tree.add("[b green]Listener:[/] None")
+            self.formatter.add_to_tree(self.lb_tree, "[b green]Listener:[/] None")
         else:
             for listener in self.lb.listeners:
                 self.add_listener_info(listener["id"])
 
-        self.console.rule(
+        self.formatter.rule(
             f"[b]Loadbalancer ID: {self.lb.id} [bright_blue]({self.lb.name})[/]",
             align="center",
         )
-        self.console.print(self.lb_tree)
-        print("")
+        self.formatter.print_tree(self.lb_tree)
+        self.formatter.print("")
 
 
 class AmphoraInfo(LoadBalancerInfo):
@@ -512,6 +742,7 @@ class AmphoraInfo(LoadBalancerInfo):
         lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): The Load Balancer
             for which Amphora details are to be retrieved.
         details (bool): If True, displays detailed attributes of Amphorae.
+        formatter (OutputFormatter): Formatter instance for output.
 
     Class Attributes:
         images_name (dict): A dictionary to cache image names for Amphorae.
@@ -519,16 +750,17 @@ class AmphoraInfo(LoadBalancerInfo):
 
     images_name = {}
 
-    def __init__(self, os_conn, lb, details):
+    def __init__(self, os_conn, lb, details, formatter):
         """
         Initialize an AmphoraInfo instance.
 
         Args:
-            os_conn (openstack.connection.Connection)
-            lb (openstack.load_balancer.v2.load_balancer.LoadBalancer)
-            details (bool)
+            os_conn (openstack.connection.Connection): OpenStack connection.
+            lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): LB object.
+            details (bool): Show detailed attributes if True.
+            formatter (OutputFormatter): Formatter instance.
         """
-        super().__init__(os_conn, lb, details)
+        super().__init__(os_conn, lb, details, formatter)
         self.lb_tree = self.create_lb_tree()
 
     def get_images_name(self, image_ids):
@@ -547,16 +779,16 @@ class AmphoraInfo(LoadBalancerInfo):
         """
         new_img_ids = [i for i in image_ids if i not in AmphoraInfo.images_name]
         if new_img_ids:
-            with self.console.status(f"Getting image details [b]{new_img_ids}[/b]"):
+            with self.formatter.status(f"Getting image details [b]{new_img_ids}[/b]"):
                 for image in self.openstack_api.retrieve_images(new_img_ids):
                     AmphoraInfo.images_name[image.id] = image.name
 
     def add_amphora_to_tree(self, amphora):
         """
-        Add information about an amphora to a Rich tree.
+        Add information about an amphora to a tree.
 
         This method retrieves detailed information about a single amphora associated
-        with a load balancer and add it to the Rich tree representing the load balancer.
+        with a load balancer and add it to the tree representing the load balancer.
 
         Args:
             amphora (openstack.load_balancer.v2.amphora.Amphora): The amphora for which
@@ -568,36 +800,43 @@ class AmphoraInfo(LoadBalancerInfo):
         # Get image name for the image ID
         self.get_images_name([amphora.image_id])
         # Get amphora server (instance) details
-        with self.console.status(f"Getting server details [b]{amphora.compute_id}[/b]"):
+        with self.formatter.status(f"Getting server details [b]{amphora.compute_id}[/b]"):
             server = self.openstack_api.retrieve_server(amphora.compute_id)
 
+        if server:
+            server_id = server.id
+            server_flavor_name = server.flavor.name if server.flavor else "N/A"
+            server_compute_host = server.compute_host
+        else:
+            server_id = "N/A"
+            server_flavor_name = "N/A"
+            server_compute_host = "N/A"
+
         # Add amphora to the load balancer tree
-        amphora_tree = self.lb_tree.add(
+        amphora_tree = self.formatter.add_to_tree(
+            self.lb_tree,
             f"[b green]amphora: [/]"
             f"[b white]{amphora.id} [/]"
             f"{amphora.role} "
             f"{amphora.status} "
             f"lb_network_ip:[green]{amphora.lb_network_ip} [/]"
             f"img:[magenta]{AmphoraInfo.images_name.get(amphora.image_id, 'N/A')}[/] "
-            f"server:[magenta]{server.id}[/] "
-            f"vm_flavor:[magenta]{server.flavor.name}[/] "
-            f"compute host:([magenta]{server.compute_host}[/])"
+            f"server:[magenta]{server_id}[/] "
+            f"vm_flavor:[magenta]{server_flavor_name}[/] "
+            f"compute host:([magenta]{server_compute_host}[/])",
         )
         if self.details:
-            add_all_attr_to_tree(amphora, amphora_tree)
+            self.add_all_attr_to_tree(amphora, amphora_tree)
 
     def display_amp_info(self):
         """
         Display information about amphorae associated with a load balancer.
 
-        This method generates a structured and colorful display of information about
-        amphorae. The information is presented using the Rich library's tree structure.
-
         Returns:
             None
         """
 
-        with self.console.status(
+        with self.formatter.status(
             f"Getting amphora details for load balancer [b]{self.lb.id}[/b]"
         ):
             amphoraes = self.openstack_api.retrieve_amphoraes(self.lb.id)
@@ -605,29 +844,27 @@ class AmphoraInfo(LoadBalancerInfo):
         for amphora in amphoraes:
             self.add_amphora_to_tree(amphora)
 
-        self.console.rule(
+        self.formatter.rule(
             f"[b]Loadbalancer ID: {self.lb.id} [bright_blue]({self.lb.name})[/]",
             align="center",
         )
-        self.console.print(self.lb_tree)
-        print("")
+        self.formatter.print_tree(self.lb_tree)
+        self.formatter.print("")
 
 
-def query_openstack_lbs(os_conn, args):
+def query_openstack_lbs(os_conn, args, formatter):
     """
     Query OpenStack Load Balancers based on user-defined filters.
 
     Args:
         os_conn (openstack.connection.Connection): An established OpenStack connection.
         args (argparse.Namespace): Parsed command-line arguments.
+        formatter (OutputFormatter): Formatter instance.
 
     Returns:
         list: A list of OpenStack Load Balancer objects that match the specified
             filters, or an empty list if no load balancers match the criteria.
     """
-
-    console = Console()
-
     # Define filter criteria
     filter_criteria = {
         "tags": args.tags,
@@ -642,7 +879,7 @@ def query_openstack_lbs(os_conn, args):
         filter_criteria["id"] = args.id
 
     openstackapi = OpenStackAPI(os_conn)
-    with console.status("Quering load balancers..."):
+    with formatter.status("Quering load balancers..."):
         filtered_lbs_tmp = openstackapi.retrieve_load_balancers(filter_criteria)
 
     if args.name:
@@ -651,6 +888,28 @@ def query_openstack_lbs(os_conn, args):
         filtered_lbs = list(filtered_lbs_tmp)
 
     return filtered_lbs
+
+
+def get_formatter(output_format):
+    """
+    Initialize and return the appropriate formatter.
+
+    Args:
+        output_format (str): The desired output format ('rich', 'plain', 'json').
+
+    Returns:
+        OutputFormatter: An instance of the appropriate formatter class.
+    """
+    formatter_classes = {
+        "rich": RichOutputFormatter,
+        "plain": PlainOutputFormatter,
+        "json": JSONOutputFormatter,
+    }
+    try:
+        return formatter_classes[output_format]()
+    except KeyError:
+        print(f"Error: Unknown output format '{output_format}'")
+        sys.exit(1)
 
 
 ##############################################################################
@@ -666,18 +925,28 @@ def main():
     openstack.enable_logging(debug=False)
     os_conn = openstack.connect()
 
-    filtered_lbs = query_openstack_lbs(os_conn, args)
+    if args.output_format == "rich" and not RICH_AVAILABLE:
+        print(
+            "Error: 'rich' library is not installed. "
+            "Please install it or choose another output format."
+        )
+        sys.exit(1)
+
+    # Initialize the formatter
+    formatter = get_formatter(args.output_format)
+
+    filtered_lbs = query_openstack_lbs(os_conn, args, formatter)
 
     if not filtered_lbs:
-        print("No load balancer(s) found.")
+        formatter.print("No load balancer(s) found.")
         sys.exit(1)
 
     for lb in filtered_lbs:
         if args.type == "amphora":
-            amphora_info = AmphoraInfo(os_conn, lb, args.details)
+            amphora_info = AmphoraInfo(os_conn, lb, args.details, formatter)
             amphora_info.display_amp_info()
         else:
-            lb_info = LoadBalancerInfo(os_conn, lb, args.details)
+            lb_info = LoadBalancerInfo(os_conn, lb, args.details, formatter)
             lb_info.display_lb_info()
 
 

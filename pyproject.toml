@@ -25,10 +25,10 @@ version = {attr = "openstack_lb_info.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [tool.black]
-line-length = 88
+line-length = 100
 
 [tool.pylint]
-max-line-length = 88
+max-line-length = 100
 disable = [
     "C0103", # (invalid-name)
 ]
