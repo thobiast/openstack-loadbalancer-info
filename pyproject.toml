@@ -4,13 +4,13 @@ description = "A script to display OpenStack Load Balancer resource details."
 readme = "README.md"
 license = {file = "LICENSE"}
 dynamic = ["version", "dependencies"]
-requires-python = ">=3.6"
+requires-python = ">=3.7"
 authors = [
     {name = "Thobias Salazar Trevisan"},
 ]
 
 [project.scripts]
-openstack-lb-info = "openstack_lb_info.openstack_lb_info:main"
+openstack-lb-info = "openstack_lb_info.main:main"
 
 [project.urls]
 "Homepage" = "https://github.com/thobiast/openstack-loadbalancer-info"
@@ -25,10 +25,10 @@ version = {attr = "openstack_lb_info.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [tool.black]
-line-length = 88
+line-length = 100
 
 [tool.pylint]
-max-line-length = 88
+max-line-length = 100
 disable = [
     "C0103", # (invalid-name)
 ]
