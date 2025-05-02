@@ -198,18 +198,20 @@ def query_openstack_lbs(openstackapi, args, formatter):
         list: A list of OpenStack Load Balancer objects that match the specified
             filters, or an empty list if no load balancers match the criteria.
     """
-    # Define filter criteria
+    # Define filter criteria. It includes only keys with non-None values.
     filter_criteria = {
-        "tags": args.tags,
-        "availability_zone": args.availability_zone,
-        "vip_network_id": args.vip_network_id,
-        "vip_subnet_id": args.vip_subnet_id,
-        "flavor_id": args.flavor_id,
-        "vip_address": args.vip_address,
+        k: v
+        for k, v in {
+            "tags": args.tags,
+            "availability_zone": args.availability_zone,
+            "vip_network_id": args.vip_network_id,
+            "vip_subnet_id": args.vip_subnet_id,
+            "flavor_id": args.flavor_id,
+            "vip_address": args.vip_address,
+            "id": args.id if args.id else None,
+        }.items()
+        if v is not None
     }
-    if args.id:
-        # Add the "id" key to the filter criteria only if specified
-        filter_criteria["id"] = args.id
 
     with formatter.status("Quering load balancers..."):
         filtered_lbs_tmp = openstackapi.retrieve_load_balancers(filter_criteria)

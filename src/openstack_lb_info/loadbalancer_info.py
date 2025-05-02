@@ -40,6 +40,56 @@ class LoadBalancerInfo:
         self.lb_tree = None
         self.openstack_api = openstack_api
 
+    def _add_all_attr_to_tree(self, obj, tree):
+        """
+        Add all attributes of an object to a tree.
+
+        This function iterates through all the attributes of a given Python object and
+        adds them to a Rich tree. Each attribute is displayed in the
+        format "attribute_name: value".
+
+        Args:
+            obj (object): The object whose attributes are to be added.
+            tree: The tree to which the attributes will be added.
+        """
+        obj_dict = obj.to_dict()
+        for attr in sorted(obj_dict):
+            value = obj_dict[attr]
+            content = f"{attr}: {value}"
+            self.formatter.add_to_tree(tree, content, highlight=True)
+
+    # pylint: disable=too-many-arguments
+    def _retrieve_and_add_to_tree(self, label, resource_id, retrieve_method, tree, format_fn):
+        """
+        Generic helper to retrieve a resource, add its formatted information to a tree.
+
+        This method displays a status message while retrieving a resource via the provided API call.
+        If the resource is found, its formatted information is added to the specified tree node. In
+        detailed mode, all resource attributes are appended to the tree node as well.
+
+        Args:
+            label (str): The resource label (e.g., "Listener, "Health Monitor", ...).
+            resource_id (str): The ID of the resource to retrieve.
+            retrieve_method (Callable): The API method used to retrieve the resource.
+            tree: The tree node to which the resource's info will be added.
+            format_fn (Callable): A function that takes the resource and returns a formatted string.
+
+        Returns:
+            The retrieved resource object if found; otherwise, returns None.
+        """
+        with self.formatter.status(f"Getting {label} details id [b]{resource_id}[/b]"):
+            resource = retrieve_method(resource_id)
+
+        if resource:
+            resource_tree = self.formatter.add_to_tree(tree, format_fn(resource))
+            if self.details:
+                self._add_all_attr_to_tree(resource, resource_tree)
+            return resource
+
+        self.formatter.add_to_tree(tree, f"[b green]{label}:[/] None")
+
+        return None
+
     def create_lb_tree(self):
         """
         Create a tree representing Load Balancer information.
@@ -55,9 +105,78 @@ class LoadBalancerInfo:
             f"tags:[magenta]{self.lb.tags}[/]"
         )
         if self.details:
-            self.add_all_attr_to_tree(self.lb, self.lb_tree)
+            self._add_all_attr_to_tree(self.lb, self.lb_tree)
 
         return self.lb_tree
+
+    def add_listener_info(self, listener_id):
+        """
+        Add information about a Listener to the Load Balancer tree.
+
+        Args:
+            listener_id (str): The ID of the Listener for which to retrieve and display
+                information.
+
+        Returns:
+            None
+        """
+
+        def format_listener(listener):
+            return (
+                f"[b green]Listener:[/] [b white]{listener.id}[/] "
+                f"([blue b]{listener.name}[/]) "
+                f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
+                f"prov_status:{self.formatter.format_status(listener.provisioning_status)} "
+                f"oper_status:{self.formatter.format_status(listener.operating_status)}"
+            )
+
+        listener = self._retrieve_and_add_to_tree(
+            "Listener",
+            listener_id,
+            self.openstack_api.retrieve_listener,
+            self.lb_tree,
+            format_listener,
+        )
+        if listener:
+            if listener.default_pool_id:
+                self.add_pool_info(self.lb_tree, listener.default_pool_id)
+            else:
+                self.formatter.add_to_tree(self.lb_tree, "[b green]Pool:[/] None")
+
+    def add_pool_info(self, tree, pool_id):
+        """
+        Add information about a Pool to the Load Balancer tree.
+
+        Args:
+            tree: The tree representing the Load Balancer.
+            pool_id (str): The ID of the Pool for which to retrieve and display.
+
+        Returns:
+            None
+        """
+
+        def format_pool(pool):
+            return (
+                f"[b green]Pool:[/] [b white]{pool.id}[/] "
+                f"protocol:[magenta]{pool.protocol}[/magenta] "
+                f"algorithm:[magenta]{pool.lb_algorithm}[/magenta] "
+                f"prov_status:{self.formatter.format_status(pool.provisioning_status)} "
+                f"oper_status:{self.formatter.format_status(pool.operating_status)}"
+            )
+
+        pool = self._retrieve_and_add_to_tree(
+            "Pool", pool_id, self.openstack_api.retrieve_pool, tree, format_pool
+        )
+        if pool:
+            if pool.health_monitor_id:
+                self.add_health_monitor_info(tree, pool.health_monitor_id)
+            else:
+                self.formatter.add_to_tree(tree, "[b green]Health Monitor:[/] None")
+
+            if pool.members:
+                self.add_pool_members(tree, pool.id, pool.members)
+            else:
+                self.formatter.add_to_tree(tree, "[b green]Member:[/] None")
 
     def add_health_monitor_info(self, pool_tree, health_monitor_id):
         """
@@ -70,25 +189,25 @@ class LoadBalancerInfo:
         Returns:
             None
         """
-        with self.formatter.status(f"Getting health monitor details id [b]{health_monitor_id}[/b]"):
-            health_monitor = self.openstack_api.retrieve_health_monitor(health_monitor_id)
 
-        if health_monitor:
-            health_monitor_tree = self.formatter.add_to_tree(
-                pool_tree,
-                f"[b green]Health Monitor:[/] [b white]{health_monitor.id}[/] "
-                f"type:[magenta]{health_monitor.type}[/magenta] "
-                f"http_method:[magenta]{health_monitor.http_method}[/magenta] "
-                f"http_codes:[magenta]{health_monitor.expected_codes}[/magenta] "
-                f"url_path:[magenta]{health_monitor.url_path}[/magenta] "
-                f"prov_status:{self.formatter.format_status(health_monitor.provisioning_status)} "
-                f"oper_status:{self.formatter.format_status(health_monitor.operating_status)}",
+        def format_health_monitor(hm):
+            return (
+                f"[b green]Health Monitor:[/] [b white]{hm.id}[/] "
+                f"type:[magenta]{hm.type}[/magenta] "
+                f"http_method:[magenta]{hm.http_method}[/magenta] "
+                f"http_codes:[magenta]{hm.expected_codes}[/magenta] "
+                f"url_path:[magenta]{hm.url_path}[/magenta] "
+                f"prov_status:{self.formatter.format_status(hm.provisioning_status)} "
+                f"oper_status:{self.formatter.format_status(hm.operating_status)}"
             )
 
-            if self.details:
-                self.add_all_attr_to_tree(health_monitor, health_monitor_tree)
-        else:
-            self.formatter.add_to_tree(pool_tree, "[b green]Health Monitor:[/] None")
+        self._retrieve_and_add_to_tree(
+            "Health Monitor",
+            health_monitor_id,
+            self.openstack_api.retrieve_health_monitor,
+            pool_tree,
+            format_health_monitor,
+        )
 
     def add_pool_members(self, pool_tree, pool_id, pool_members):
         """
@@ -107,105 +226,24 @@ class LoadBalancerInfo:
             with self.formatter.status(f"Getting member details id [b]{member['id']}[/b]"):
                 os_m = self.openstack_api.retrieve_member(member["id"], pool_id)
 
-            member_tree = self.formatter.add_to_tree(
-                pool_tree,
-                f"[b green]Member:[/] [b white]{os_m.id}[/] "
-                f"IP:[magenta]{os_m.address}[/magenta] "
-                f"port:[magenta]{os_m.protocol_port}[/magenta] "
-                f"weight:[magenta]{os_m.weight}[/magenta] "
-                f"backup:[magenta]{os_m.backup}[/magenta] "
-                f"prov_status:{self.formatter.format_status(os_m.provisioning_status)} "
-                f"oper_status:{self.formatter.format_status(os_m.operating_status)}",
+            def format_member(m):
+                return (
+                    f"[b green]Member:[/] [b white]{m.id}[/] "
+                    f"IP:[magenta]{m.address}[/magenta] "
+                    f"port:[magenta]{m.protocol_port}[/magenta] "
+                    f"weight:[magenta]{m.weight}[/magenta] "
+                    f"backup:[magenta]{m.backup}[/magenta] "
+                    f"prov_status:{self.formatter.format_status(m.provisioning_status)} "
+                    f"oper_status:{self.formatter.format_status(m.operating_status)}"
+                )
+
+            def return_member(_, os_m=os_m):
+                # Simply return the already retrieved member.
+                return os_m
+
+            self._retrieve_and_add_to_tree(
+                "Member", member["id"], return_member, pool_tree, format_member
             )
-
-            if self.details:
-                self.add_all_attr_to_tree(os_m, member_tree)
-
-    def add_pool_info(self, tree, pool_id):
-        """
-        Add information about a Pool to the Load Balancer tree.
-
-        Args:
-            tree: The tree representing the Load Balancer.
-            pool_id (str): The ID of the Pool for which to retrieve and display.
-
-        Returns:
-            None
-        """
-        with self.formatter.status(f"Getting pool details id [b]{pool_id}[/b]"):
-            pool = self.openstack_api.retrieve_pool(pool_id)
-
-        pool_tree = self.formatter.add_to_tree(
-            tree,
-            f"[b green]Pool:[/] [b white]{pool.id}[/] "
-            f"protocol:[magenta]{pool.protocol}[/magenta] "
-            f"algorithm:[magenta]{pool.lb_algorithm}[/magenta] "
-            f"prov_status:{self.formatter.format_status(pool.provisioning_status)} "
-            f"oper_status:{self.formatter.format_status(pool.operating_status)} ",
-        )
-        if self.details:
-            self.add_all_attr_to_tree(pool, pool_tree)
-
-        if pool.health_monitor_id:
-            self.add_health_monitor_info(pool_tree, pool.health_monitor_id)
-        else:
-            self.formatter.add_to_tree(pool_tree, "[b green]Health Monitor:[/] None")
-
-        if pool.members:
-            self.add_pool_members(pool_tree, pool.id, pool.members)
-        else:
-            self.formatter.add_to_tree(pool_tree, "[b green]Member:[/] None")
-
-    def add_listener_info(self, listener_id):
-        """
-        Add information about a Listener to the Load Balancer tree.
-
-        Args:
-            listener_id (str): The ID of the Listener for which to retrieve and display
-                information.
-
-        Returns:
-            None
-        """
-        with self.formatter.status(
-            f"Getting listener details for loadbalancers "
-            f"[b]{self.lb.id}[/b] listener: [b]{listener_id}[/b]"
-        ):
-            listener = self.openstack_api.retrieve_listener(listener_id)
-
-        listener_tree = self.formatter.add_to_tree(
-            self.lb_tree,
-            f"[b green]Listener:[/] [b white]{listener.id}[/] "
-            f"([blue b]{listener.name}[/]) "
-            f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
-            f"prov_status:{self.formatter.format_status(listener.provisioning_status)} "
-            f"oper_status:{self.formatter.format_status(listener.operating_status)} ",
-        )
-        if self.details:
-            self.add_all_attr_to_tree(listener, listener_tree)
-
-        if listener.default_pool_id:
-            self.add_pool_info(listener_tree, listener.default_pool_id)
-        else:
-            self.formatter.add_to_tree(listener_tree, "[b green]Pool:[/] None")
-
-    def add_all_attr_to_tree(self, obj, tree):
-        """
-        Add all attributes of an object to a tree.
-
-        This function iterates through all the attributes of a given Python object and
-        adds them to a Rich tree. Each attribute is displayed in the
-        format "attribute_name: value".
-
-        Args:
-            obj (object): The object whose attributes are to be added.
-            tree: The tree to which the attributes will be added.
-        """
-        obj_dict = obj.to_dict()
-        for attr in sorted(obj_dict):
-            value = obj_dict[attr]
-            content = f"{attr}: {value}"
-            self.formatter.add_to_tree(tree, content, highlight=True)
 
     def display_lb_info(self):
         """
@@ -320,7 +358,7 @@ class AmphoraInfo(LoadBalancerInfo):
             f"compute host:([magenta]{server_compute_host}[/])",
         )
         if self.details:
-            self.add_all_attr_to_tree(amphora, amphora_tree)
+            self._add_all_attr_to_tree(amphora, amphora_tree)
 
     def display_amp_info(self):
         """
