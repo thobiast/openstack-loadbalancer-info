@@ -40,24 +40,6 @@ class LoadBalancerInfo:
         self.lb_tree = None
         self.openstack_api = openstack_api
 
-    def _add_all_attr_to_tree(self, obj, tree):
-        """
-        Add all attributes of an object to a tree.
-
-        This function iterates through all the attributes of a given Python object and
-        adds them to a Rich tree. Each attribute is displayed in the
-        format "attribute_name: value".
-
-        Args:
-            obj (object): The object whose attributes are to be added.
-            tree: The tree to which the attributes will be added.
-        """
-        obj_dict = obj.to_dict()
-        for attr in sorted(obj_dict):
-            value = obj_dict[attr]
-            content = f"{attr}: {value}"
-            self.formatter.add_to_tree(tree, content, highlight=True)
-
     def create_lb_tree(self):
         """
         Create a tree representing Load Balancer information.
@@ -211,19 +193,6 @@ class AmphoraInfo(LoadBalancerInfo):
 
     images_name = {}
 
-    def __init__(self, openstack_api, lb, details, formatter):
-        """
-        Initialize an AmphoraInfo instance.
-
-        Args:
-            openstack_api (OpenStackAPI): An instance of `OpenStackAPI` for OpenStack interactions.
-            lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): The Load Balancer object.
-            details (bool): If True, displays detailed attributes of the Amphorae.
-            formatter (OutputFormatter): An instance of a formatter class for output formatting.
-        """
-        super().__init__(openstack_api, lb, details, formatter)
-        self.lb_tree = self.create_lb_tree()
-
     def get_images_name(self, image_ids):
         """
         Retrieve image names for a list of image IDs and cache the results.
@@ -260,34 +229,15 @@ class AmphoraInfo(LoadBalancerInfo):
         """
         # Get image name for the image ID
         self.get_images_name([amphora.image_id])
+        image_name = AmphoraInfo.images_name.get(amphora.image_id, "N/A")
+
         # Get amphora server (instance) details
         with self.formatter.status(f"Getting server details [b]{amphora.compute_id}[/b]"):
             server = self.openstack_api.retrieve_server(amphora.compute_id)
 
-        if server:
-            server_id = server.id
-            server_flavor_name = server.flavor.name if server.flavor else "N/A"
-            server_compute_host = server.compute_host
-        else:
-            server_id = "N/A"
-            server_flavor_name = "N/A"
-            server_compute_host = "N/A"
-
-        # Add amphora to the load balancer tree
-        amphora_tree = self.formatter.add_to_tree(  # pylint: disable=duplicate-code
-            self.lb_tree,  # pylint: disable=duplicate-code
-            f"[b green]amphora: [/]"
-            f"[b white]{amphora.id} [/]"
-            f"{amphora.role} "
-            f"{amphora.status} "
-            f"lb_network_ip:[green]{amphora.lb_network_ip} [/]"
-            f"img:[magenta]{AmphoraInfo.images_name.get(amphora.image_id, 'N/A')}[/] "
-            f"server:[magenta]{server_id}[/] "
-            f"vm_flavor:[magenta]{server_flavor_name}[/] "
-            f"compute host:([magenta]{server_compute_host}[/])",
-        )
+        amphora_tree = self.formatter.add_amphora_to_tree(self.lb_tree, amphora, server, image_name)
         if self.details:
-            self._add_all_attr_to_tree(amphora, amphora_tree)
+            self.formatter.add_details_to_tree(amphora_tree, amphora.to_dict())
 
     def display_amp_info(self):
         """
@@ -296,6 +246,7 @@ class AmphoraInfo(LoadBalancerInfo):
         Returns:
             None
         """
+        self.lb_tree = self.create_lb_tree()
 
         with self.formatter.status(
             f"Getting amphora details for load balancer [b]{self.lb.id}[/b]"

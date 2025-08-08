@@ -11,7 +11,7 @@ information about OpenStack resources in a user-friendly and structured manner.
 
 import contextlib
 import json
-import re  # delete after
+import re
 from abc import ABC, abstractmethod
 
 try:
@@ -26,14 +26,6 @@ except ImportError:
 
 class OutputFormatter(ABC):
     """Abstract base class for output formatters."""
-
-    @abstractmethod
-    def create_tree(self, name):
-        """Create a tree structure for the output."""
-
-    @abstractmethod
-    def add_to_tree(self, tree, content):
-        """Add content to the tree structure."""
 
     @abstractmethod
     def print_tree(self, tree):
@@ -90,7 +82,6 @@ class OutputFormatter(ABC):
     @abstractmethod
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
         """Adds a formatted amphora node to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
 
 class RichOutputFormatter(OutputFormatter):
@@ -100,10 +91,10 @@ class RichOutputFormatter(OutputFormatter):
         self.console = Console()
         self.highlighter = ReprHighlighter()
 
-    def create_tree(self, name):
+    def _create_tree(self, name):
         return Tree(name)
 
-    def add_to_tree(self, tree, content, highlight=False):
+    def _add_to_tree(self, tree, content, highlight=False):
         if highlight:
             content = self.highlighter(content)
         return tree.add(content)
@@ -123,10 +114,6 @@ class RichOutputFormatter(OutputFormatter):
     def rule(self, title, align="center"):
         self.console.rule(title, align=align)
 
-    #    def format_message(self, message):
-    #        """Return the message as-is, preserving Rich formatting."""
-    #        return message
-
     def format_status(self, status):
         status_colors = {
             "ACTIVE": "green",
@@ -140,10 +127,10 @@ class RichOutputFormatter(OutputFormatter):
         for attr in sorted(details_dict):
             value = details_dict[attr]
             content = f"{attr}: {value}"
-            self.add_to_tree(tree, content, highlight=True)
+            self._add_to_tree(tree, content, highlight=True)
 
     def add_empty_node(self, tree, resource_name):
-        self.add_to_tree(tree, f"[b green]{resource_name}:[/] None")
+        self._add_to_tree(tree, f"[b green]{resource_name}:[/] None")
 
     def add_lb_to_tree(self, lb):
         message = (
@@ -153,7 +140,7 @@ class RichOutputFormatter(OutputFormatter):
             f"oper_status:{self.format_status(lb.operating_status)} "
             f"tags:[magenta]{lb.tags}[/]"
         )
-        return self.create_tree(message)
+        return self._create_tree(message)
 
     def add_listener_to_tree(self, parent_tree, listener):
         message = (
@@ -163,7 +150,7 @@ class RichOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(listener.provisioning_status)} "
             f"oper_status:{self.format_status(listener.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_pool_to_tree(self, parent_tree, pool):
         message = (
@@ -173,7 +160,7 @@ class RichOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(pool.provisioning_status)} "
             f"oper_status:{self.format_status(pool.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
         message = (
@@ -185,7 +172,7 @@ class RichOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(hm.provisioning_status)} "
             f"oper_status:{self.format_status(hm.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_member_to_tree(self, parent_tree, member):
         message = (
@@ -197,14 +184,13 @@ class RichOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(member.provisioning_status)} "
             f"oper_status:{self.format_status(member.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
         server_id = server.id if server else "N/A"
         server_flavor_name = server.flavor.name if server and server.flavor else "N/A"
         server_compute_host = server.compute_host if server else "N/A"
 
-        # pylint: disable=duplicate-code
         message = (
             f"[b green]amphora: [/]"
             f"[b white]{amphora.id} [/]"
@@ -216,40 +202,37 @@ class RichOutputFormatter(OutputFormatter):
             f"vm_flavor:[magenta]{server_flavor_name}[/] "
             f"compute host:([magenta]{server_compute_host}[/])"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
 
 class PlainOutputFormatter(OutputFormatter):
     """Formatter for plain text output."""
 
-    def create_tree(self, name):
+    def _create_tree(self, name):
         return {"name": name, "children": []}
 
-    def add_to_tree(self, tree, content, highlight=False):
-        _ = highlight
-        child_tree = {"name": self.format_message(content), "children": []}
+    def _add_to_tree(self, tree, content):
+        child_tree = {"name": content, "children": []}
         tree["children"].append(child_tree)
         return child_tree
 
     def print_tree(self, tree, level=0):
         indent = "    " * level
-        print(f"{indent}{self.format_message(tree['name'])}")
+        print(f"{indent}{tree['name']}")
         for child in tree.get("children", []):
             self.print_tree(child, level + 1)
 
     def print(self, message):
-        print(self.format_message(message))
+        print(message)
 
     def status(self, message):
         @contextlib.contextmanager
         def plain_status():
-            # Remove Rich formatting codes from the message
-            clean_message = self.format_message(message)
-            print(f"[STATUS] {clean_message}")
+            print(f"[STATUS] {message}")
             try:
                 yield
             finally:
-                print(f"[STATUS] Completed: {clean_message}")
+                print(f"[STATUS] Completed: {message}")
 
         return plain_status()
 
@@ -257,14 +240,9 @@ class PlainOutputFormatter(OutputFormatter):
         print()
 
     def rule(self, title, align="center"):
-        title = self.format_message(title)
-        print(f"{title}")
-        print("-" * len(title))
-
-    def format_message(self, message):
-        """Remove Rich text formatting tags from a message."""
-        clean_message = re.sub(r"\[\/?[^\]]+\]", "", message)
-        return clean_message
+        clean_title = re.sub(r"\[\/?[^\]]+\]", "", title)
+        print(f"{clean_title}")
+        print("-" * len(clean_title))
 
     def format_status(self, status):
         return status
@@ -273,10 +251,10 @@ class PlainOutputFormatter(OutputFormatter):
         for attr in sorted(details_dict):
             value = details_dict[attr]
             content = f"{attr}: {value}"
-            self.add_to_tree(tree, content)
+            self._add_to_tree(tree, content)
 
     def add_empty_node(self, tree, resource_name):
-        self.add_to_tree(tree, f"{resource_name}: None")
+        self._add_to_tree(tree, f"{resource_name}: None")
 
     def add_lb_to_tree(self, lb):
         message = (
@@ -286,7 +264,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"oper_status:{self.format_status(lb.operating_status)} "
             f"tags:{lb.tags}"
         )
-        return self.create_tree(message)
+        return self._create_tree(message)
 
     def add_listener_to_tree(self, parent_tree, listener):
         message = (
@@ -295,7 +273,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(listener.provisioning_status)} "
             f"oper_status:{self.format_status(listener.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_pool_to_tree(self, parent_tree, pool):
         message = (
@@ -305,7 +283,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(pool.provisioning_status)} "
             f"oper_status:{self.format_status(pool.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
         message = (
@@ -317,7 +295,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(hm.provisioning_status)} "
             f"oper_status:{self.format_status(hm.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_member_to_tree(self, parent_tree, member):
         message = (
@@ -329,7 +307,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(member.provisioning_status)} "
             f"oper_status:{self.format_status(member.operating_status)}"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
         server_id = server.id if server else "N/A"
@@ -343,7 +321,7 @@ class PlainOutputFormatter(OutputFormatter):
             f"vm_flavor:{server_flavor_name} "
             f"compute host:({server_compute_host})"
         )
-        return self.add_to_tree(parent_tree, message)
+        return self._add_to_tree(parent_tree, message)
 
 
 class JSONOutputFormatter(OutputFormatter):
@@ -352,32 +330,13 @@ class JSONOutputFormatter(OutputFormatter):
     def __init__(self):
         self.data = None
 
-    def create_tree(self, name):
-        # Remove Rich codes
-        clean_name = self.format_message(name)
-        self.data = {"name": clean_name, "children": []}
-        return self.data
-
-    def add_to_tree(self, tree, content, highlight=False):
-        _ = highlight
-        # Remove Rich codes
-        clean_content = self.format_message(content)
-        # Create a new node and add it to the tree's children
-        child = {"name": clean_content, "children": []}
-        tree["children"].append(child)
-        return child
-
     def print_tree(self, tree):
         print(json.dumps(tree, indent=4))
 
     def print(self, message):
-        # Remove Rich codes
-        clean_message = self.format_message(message)
-        # Not show empty prints
-        if not clean_message:
+        if not message:
             return
-        # For consistency, wrap messages in a dict
-        output = {"message": clean_message}
+        output = {"message": message}
         print(json.dumps(output, indent=4))
 
     def status(self, message):
@@ -391,13 +350,6 @@ class JSONOutputFormatter(OutputFormatter):
 
     def format_status(self, status):
         return status
-
-    def format_message(self, message):
-        """Remove Rich text formatting tags from a message."""
-        if isinstance(message, str):
-            clean_message = re.sub(r"\[\/?[^\]]+\]", "", message)
-            return clean_message
-        return message
 
     def _add_node_from_obj(self, parent_node, node_type, resource_obj):
         node = resource_obj.to_dict()
