@@ -62,37 +62,30 @@ class OutputFormatter(ABC):
     @abstractmethod
     def add_details_to_tree(self, tree, details_dict):
         """Adds all attributes from an object to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_empty_node(self, tree, resource_name):
         """Adds a placeholder for a missing resource."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_lb_to_tree(self, lb):
         """Create and return the root tree for the Load Balancer."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_listener_to_tree(self, parent_tree, listener):
         """Adds a formatted listener node to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_pool_to_tree(self, parent_tree, pool):
         """Adds a formatted pool node to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_health_monitor_to_tree(self, parent_tree, hm):
         """Adds a formatted health monitor node to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_member_to_tree(self, parent_tree, member):
         """Adds a formatted member node to the tree."""
-        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
@@ -130,9 +123,9 @@ class RichOutputFormatter(OutputFormatter):
     def rule(self, title, align="center"):
         self.console.rule(title, align=align)
 
-    def format_message(self, message):
-        """Return the message as-is, preserving Rich formatting."""
-        return message
+    #    def format_message(self, message):
+    #        """Return the message as-is, preserving Rich formatting."""
+    #        return message
 
     def format_status(self, status):
         status_colors = {
@@ -144,28 +137,86 @@ class RichOutputFormatter(OutputFormatter):
         return f"[{color}]{status}[/{color}]"
 
     def add_details_to_tree(self, tree, details_dict):
-        pass
+        for attr in sorted(details_dict):
+            value = details_dict[attr]
+            content = f"{attr}: {value}"
+            self.add_to_tree(tree, content, highlight=True)
 
     def add_empty_node(self, tree, resource_name):
-        pass
+        self.add_to_tree(tree, f"[b green]{resource_name}:[/] None")
 
     def add_lb_to_tree(self, lb):
-        pass
+        message = (
+            f"LB:[bright_yellow] {lb.id}[/] "
+            f"vip:[bright_cyan]{lb.vip_address}[/] "
+            f"prov_status:{self.format_status(lb.provisioning_status)} "
+            f"oper_status:{self.format_status(lb.operating_status)} "
+            f"tags:[magenta]{lb.tags}[/]"
+        )
+        return self.create_tree(message)
 
     def add_listener_to_tree(self, parent_tree, listener):
-        pass
+        message = (
+            f"[b green]Listener:[/] [b white]{listener.id}[/] "
+            f"([blue b]{listener.name}[/]) "
+            f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
+            f"prov_status:{self.format_status(listener.provisioning_status)} "
+            f"oper_status:{self.format_status(listener.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_pool_to_tree(self, parent_tree, pool):
-        pass
+        message = (
+            f"[b green]Pool:[/] [b white]{pool.id}[/] "
+            f"protocol:[magenta]{pool.protocol}[/magenta] "
+            f"algorithm:[magenta]{pool.lb_algorithm}[/magenta] "
+            f"prov_status:{self.format_status(pool.provisioning_status)} "
+            f"oper_status:{self.format_status(pool.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
-        pass
+        message = (
+            f"[b green]Health Monitor:[/] [b white]{hm.id}[/] "
+            f"type:[magenta]{hm.type}[/magenta] "
+            f"http_method:[magenta]{hm.http_method}[/magenta] "
+            f"http_codes:[magenta]{hm.expected_codes}[/magenta] "
+            f"url_path:[magenta]{hm.url_path}[/magenta] "
+            f"prov_status:{self.format_status(hm.provisioning_status)} "
+            f"oper_status:{self.format_status(hm.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_member_to_tree(self, parent_tree, member):
-        pass
+        message = (
+            f"[b green]Member:[/] [b white]{member.id}[/] "
+            f"IP:[magenta]{member.address}[/magenta] "
+            f"port:[magenta]{member.protocol_port}[/magenta] "
+            f"weight:[magenta]{member.weight}[/magenta] "
+            f"backup:[magenta]{member.backup}[/magenta] "
+            f"prov_status:{self.format_status(member.provisioning_status)} "
+            f"oper_status:{self.format_status(member.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
-        pass
+        server_id = server.id if server else "N/A"
+        server_flavor_name = server.flavor.name if server and server.flavor else "N/A"
+        server_compute_host = server.compute_host if server else "N/A"
+
+        # pylint: disable=duplicate-code
+        message = (
+            f"[b green]amphora: [/]"
+            f"[b white]{amphora.id} [/]"
+            f"{amphora.role} "
+            f"{amphora.status} "
+            f"lb_network_ip:[green]{amphora.lb_network_ip} [/]"
+            f"img:[magenta]{image_name}[/] "
+            f"server:[magenta]{server_id}[/] "
+            f"vm_flavor:[magenta]{server_flavor_name}[/] "
+            f"compute host:([magenta]{server_compute_host}[/])"
+        )
+        return self.add_to_tree(parent_tree, message)
 
 
 class PlainOutputFormatter(OutputFormatter):
@@ -219,28 +270,80 @@ class PlainOutputFormatter(OutputFormatter):
         return status
 
     def add_details_to_tree(self, tree, details_dict):
-        pass
+        for attr in sorted(details_dict):
+            value = details_dict[attr]
+            content = f"{attr}: {value}"
+            self.add_to_tree(tree, content)
 
     def add_empty_node(self, tree, resource_name):
-        pass
+        self.add_to_tree(tree, f"{resource_name}: None")
 
     def add_lb_to_tree(self, lb):
-        pass
+        message = (
+            f"LB: {lb.id} "
+            f"vip:{lb.vip_address} "
+            f"prov_status:{self.format_status(lb.provisioning_status)} "
+            f"oper_status:{self.format_status(lb.operating_status)} "
+            f"tags:{lb.tags}"
+        )
+        return self.create_tree(message)
 
     def add_listener_to_tree(self, parent_tree, listener):
-        pass
+        message = (
+            f"Listener: {listener.id} ({listener.name}) "
+            f"port:{listener.protocol}/{listener.protocol_port} "
+            f"prov_status:{self.format_status(listener.provisioning_status)} "
+            f"oper_status:{self.format_status(listener.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_pool_to_tree(self, parent_tree, pool):
-        pass
+        message = (
+            f"Pool: {pool.id} "
+            f"protocol:{pool.protocol} "
+            f"algorithm:{pool.lb_algorithm} "
+            f"prov_status:{self.format_status(pool.provisioning_status)} "
+            f"oper_status:{self.format_status(pool.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
-        pass
+        message = (
+            f"Health Monitor: {hm.id} "
+            f"type:{hm.type} "
+            f"http_method:{hm.http_method} "
+            f"http_codes:{hm.expected_codes} "
+            f"url_path:{hm.url_path} "
+            f"prov_status:{self.format_status(hm.provisioning_status)} "
+            f"oper_status:{self.format_status(hm.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_member_to_tree(self, parent_tree, member):
-        pass
+        message = (
+            f"Member: {member.id} "
+            f"IP:{member.address} "
+            f"port:{member.protocol_port} "
+            f"weight:{member.weight} "
+            f"backup:{member.backup} "
+            f"prov_status:{self.format_status(member.provisioning_status)} "
+            f"oper_status:{self.format_status(member.operating_status)}"
+        )
+        return self.add_to_tree(parent_tree, message)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
-        pass
+        server_id = server.id if server else "N/A"
+        server_flavor_name = server.flavor.name if server and server.flavor else "N/A"
+        server_compute_host = server.compute_host if server else "N/A"
+        message = (
+            f"amphora: {amphora.id} {amphora.role} {amphora.status} "
+            f"lb_network_ip:{amphora.lb_network_ip} "
+            f"img:{image_name} "
+            f"server:{server_id} "
+            f"vm_flavor:{server_flavor_name} "
+            f"compute host:({server_compute_host})"
+        )
+        return self.add_to_tree(parent_tree, message)
 
 
 class JSONOutputFormatter(OutputFormatter):
@@ -296,29 +399,52 @@ class JSONOutputFormatter(OutputFormatter):
             return clean_message
         return message
 
+    def _add_node_from_obj(self, parent_node, node_type, resource_obj):
+        node = resource_obj.to_dict()
+        node["type"] = node_type
+        if "children" not in node:
+            node["children"] = []
+        parent_node["children"].append(node)
+        return node
+
     def add_details_to_tree(self, tree, details_dict):
         pass
 
     def add_empty_node(self, tree, resource_name):
-        pass
+        tree["children"].append({f"{resource_name.lower().replace(' ', '_')}": None})
 
     def add_lb_to_tree(self, lb):
-        pass
+        root_node = lb.to_dict()
+        root_node["type"] = "loadbalancer"
+        root_node["children"] = []
+        return root_node
 
     def add_listener_to_tree(self, parent_tree, listener):
-        pass
+        return self._add_node_from_obj(parent_tree, "listener", listener)
 
     def add_pool_to_tree(self, parent_tree, pool):
-        pass
+        return self._add_node_from_obj(parent_tree, "pool", pool)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
-        pass
+        return self._add_node_from_obj(parent_tree, "health_monitor", hm)
 
     def add_member_to_tree(self, parent_tree, member):
-        pass
+        return self._add_node_from_obj(parent_tree, "member", member)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
-        pass
+        node = amphora.to_dict()
+        node["type"] = "amphora"
+        node["image_name"] = image_name
+        if server:
+            node["server_details"] = {
+                "id": server.id,
+                "flavor": server.flavor.name if server.flavor else "N/A",
+                "compute_host": server.compute_host,
+            }
+        else:
+            node["server_details"] = None
+        parent_tree["children"].append(node)
+        return node
 
 
 # vim: ts=4
