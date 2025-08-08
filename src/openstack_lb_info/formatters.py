@@ -11,7 +11,7 @@ information about OpenStack resources in a user-friendly and structured manner.
 
 import contextlib
 import json
-import re
+import re  # delete after
 from abc import ABC, abstractmethod
 
 try:
@@ -59,6 +59,46 @@ class OutputFormatter(ABC):
     def format_status(self, status):
         """Format status text."""
 
+    @abstractmethod
+    def add_details_to_tree(self, tree, details_dict):
+        """Adds all attributes from an object to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_empty_node(self, tree, resource_name):
+        """Adds a placeholder for a missing resource."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_lb_to_tree(self, lb):
+        """Create and return the root tree for the Load Balancer."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_listener_to_tree(self, parent_tree, listener):
+        """Adds a formatted listener node to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_pool_to_tree(self, parent_tree, pool):
+        """Adds a formatted pool node to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_health_monitor_to_tree(self, parent_tree, hm):
+        """Adds a formatted health monitor node to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_member_to_tree(self, parent_tree, member):
+        """Adds a formatted member node to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
+    @abstractmethod
+    def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
+        """Adds a formatted amphora node to the tree."""
+        pass  # pylint: disable=unnecessary-pass
+
 
 class RichOutputFormatter(OutputFormatter):
     """Formatter using the Rich library."""
@@ -102,6 +142,30 @@ class RichOutputFormatter(OutputFormatter):
         }
         color = status_colors.get(status, "red")
         return f"[{color}]{status}[/{color}]"
+
+    def add_details_to_tree(self, tree, details_dict):
+        pass
+
+    def add_empty_node(self, tree, resource_name):
+        pass
+
+    def add_lb_to_tree(self, lb):
+        pass
+
+    def add_listener_to_tree(self, parent_tree, listener):
+        pass
+
+    def add_pool_to_tree(self, parent_tree, pool):
+        pass
+
+    def add_health_monitor_to_tree(self, parent_tree, hm):
+        pass
+
+    def add_member_to_tree(self, parent_tree, member):
+        pass
+
+    def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
+        pass
 
 
 class PlainOutputFormatter(OutputFormatter):
@@ -153,6 +217,30 @@ class PlainOutputFormatter(OutputFormatter):
 
     def format_status(self, status):
         return status
+
+    def add_details_to_tree(self, tree, details_dict):
+        pass
+
+    def add_empty_node(self, tree, resource_name):
+        pass
+
+    def add_lb_to_tree(self, lb):
+        pass
+
+    def add_listener_to_tree(self, parent_tree, listener):
+        pass
+
+    def add_pool_to_tree(self, parent_tree, pool):
+        pass
+
+    def add_health_monitor_to_tree(self, parent_tree, hm):
+        pass
+
+    def add_member_to_tree(self, parent_tree, member):
+        pass
+
+    def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
+        pass
 
 
 class JSONOutputFormatter(OutputFormatter):
@@ -207,6 +295,30 @@ class JSONOutputFormatter(OutputFormatter):
             clean_message = re.sub(r"\[\/?[^\]]+\]", "", message)
             return clean_message
         return message
+
+    def add_details_to_tree(self, tree, details_dict):
+        pass
+
+    def add_empty_node(self, tree, resource_name):
+        pass
+
+    def add_lb_to_tree(self, lb):
+        pass
+
+    def add_listener_to_tree(self, parent_tree, listener):
+        pass
+
+    def add_pool_to_tree(self, parent_tree, pool):
+        pass
+
+    def add_health_monitor_to_tree(self, parent_tree, hm):
+        pass
+
+    def add_member_to_tree(self, parent_tree, member):
+        pass
+
+    def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
+        pass
 
 
 # vim: ts=4
