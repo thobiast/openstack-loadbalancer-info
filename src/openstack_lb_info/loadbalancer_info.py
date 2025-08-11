@@ -4,10 +4,9 @@ Load Balancer Information Module
 --------------------------------
 
 This module provides classes for retrieving, organizing, and displaying detailed information
-about OpenStack Load Balancers and their associated resources, such as listeners, pools,
-health monitors, members, and amphorae. It uses the `OpenStackAPI` class for interacting
-with the OpenStack environment and uses `OutputFormatter` instances to present the information
-in various output formats (e.g., Rich text, plain text, JSON).
+about OpenStack Load Balancers and their associated resources. It uses the `OpenStackAPI`
+class for interacting with the OpenStack environment and uses `OutputFormatter` instances
+to present the information in various output formats (e.g., Rich text, plain text, JSON).
 
 Classes:
 
@@ -21,7 +20,7 @@ Classes:
 
 class LoadBalancerInfo:
     """
-    Provides information and structured display of OpenStack Load Balancers.
+    Retrieves and displays information for a single OpenStack Load Balancer.
     """
 
     def __init__(self, openstack_api, lb, details, formatter):
@@ -37,38 +36,35 @@ class LoadBalancerInfo:
         self.lb = lb
         self.details = details
         self.formatter = formatter
-        self.lb_tree = None
         self.openstack_api = openstack_api
+        # The root of the display tree for the formatter
+        self.lb_tree = None
 
     def create_lb_tree(self):
         """
-        Create a tree representing Load Balancer information.
+        Create the root of the display tree for the load balancer.
 
-        Returns:
-            Tree: A tree object representing Load Balancer information.
+        This method instructs the formatter to create the main tree node
+        and adds detailed attributes if requested.
         """
         self.lb_tree = self.formatter.add_lb_to_tree(self.lb)
         if self.details:
             self.formatter.add_details_to_tree(self.lb_tree, self.lb.to_dict())
 
-        return self.lb_tree
-
-    def add_listener_info(self, parent_tree, listener_id):
+    def add_listener_info(self, lb_tree, listener_id):
         """
-        Add information about a Listener to the Load Balancer tree.
+        Add information about the Listener to the Load Balancer's tree.
 
         Args:
+            lb_tree (object): The root tree node for the load balancer.
             listener_id (str): The ID of the Listener for which to retrieve and display
                 information.
-
-        Returns:
-            None
         """
         with self.formatter.status(f"Getting Listener details id [b]{listener_id}[/b]"):
             listener = self.openstack_api.retrieve_listener(listener_id)
 
         if listener:
-            listener_tree = self.formatter.add_listener_to_tree(parent_tree, listener)
+            listener_tree = self.formatter.add_listener_to_tree(lb_tree, listener)
             if self.details:
                 self.formatter.add_details_to_tree(listener_tree, listener.to_dict())
 
@@ -77,24 +73,21 @@ class LoadBalancerInfo:
             else:
                 self.formatter.add_empty_node(listener_tree, "Pool")
         else:
-            self.formatter.add_empty_node(parent_tree, "Listener")
+            self.formatter.add_empty_node(lb_tree, "Listener")
 
-    def add_pool_info(self, parent_tree, pool_id):
+    def add_pool_info(self, listener_tree, pool_id):
         """
-        Add information about a Pool to the Load Balancer tree.
+        Add information about the Pool to the listener's tree.
 
         Args:
-            tree: The tree representing the Load Balancer.
+            listener_tree (object): The tree representing the listener.
             pool_id (str): The ID of the Pool for which to retrieve and display.
-
-        Returns:
-            None
         """
         with self.formatter.status(f"Getting Pool details id [b]{pool_id}[/b]"):
             pool = self.openstack_api.retrieve_pool(pool_id)
 
         if pool:
-            pool_tree = self.formatter.add_pool_to_tree(parent_tree, pool)
+            pool_tree = self.formatter.add_pool_to_tree(listener_tree, pool)
             if self.details:
                 self.formatter.add_details_to_tree(pool_tree, pool.to_dict())
 
@@ -108,60 +101,54 @@ class LoadBalancerInfo:
             else:
                 self.formatter.add_empty_node(pool_tree, "Member")
         else:
-            self.formatter.add_empty_node(parent_tree, "Pool")
+            self.formatter.add_empty_node(listener_tree, "Pool")
 
-    def add_health_monitor_info(self, parent_tree, health_monitor_id):
+    def add_health_monitor_info(self, pool_tree, health_monitor_id):
         """
-        Add information about a Health Monitor to a Pool tree.
+        Add information about the Health Monitor to the pool's tree.
 
         Args:
-            pool_tree: The tree representing the Pool.
+            pool_tree: The tree representing the pool.
             health_monitor_id (str): The ID of the Health Monitor.
-
-        Returns:
-            None
         """
         with self.formatter.status(f"Getting Health Monitor details id [b]{health_monitor_id}[/b]"):
             hm = self.openstack_api.retrieve_health_monitor(health_monitor_id)
 
         if hm:
-            hm_tree = self.formatter.add_health_monitor_to_tree(parent_tree, hm)
+            hm_tree = self.formatter.add_health_monitor_to_tree(pool_tree, hm)
             if self.details:
                 self.formatter.add_details_to_tree(hm_tree, hm.to_dict())
         else:
-            self.formatter.add_empty_node(parent_tree, "Health Monitor")
+            self.formatter.add_empty_node(pool_tree, "Health Monitor")
 
-    def add_pool_members(self, parent_tree, pool_id, pool_members):
+    def add_pool_members(self, pool_tree, pool_id, pool_members):
         """
-        Add information about Members of a Pool to the Pool tree.
+        Add information about Members to the pool's tree.
 
         Args:
             pool_tree: The tree representing the Pool.
             pool_id (str): The ID of the Pool for which to retrieve Member information.
             pool_members (list): A list of dictionaries containing Member information,
                 where each dictionary includes the Member's ID and additional details.
-
-        Returns:
-            None
         """
-        for member_ref in pool_members:
-            member_id = member_ref["id"]
+        for member in pool_members:
+            member_id = member["id"]
             with self.formatter.status(f"Getting member details id [b]{member_id}[/b]"):
                 member = self.openstack_api.retrieve_member(member_id, pool_id)
 
             if member:
-                member_tree = self.formatter.add_member_to_tree(parent_tree, member)
+                member_tree = self.formatter.add_member_to_tree(pool_tree, member)
                 if self.details:
                     self.formatter.add_details_to_tree(member_tree, member.to_dict())
             else:
-                self.formatter.add_empty_node(parent_tree, f"Member ({member_id})")
+                self.formatter.add_empty_node(pool_tree, f"Member ({member_id})")
 
     def display_lb_info(self):
         """
-        Display information about the Load Balancer.
+        Fetch and display information about the Load Balancer.
 
-        Returns:
-            None
+        This is the main entry point for this class. It builds the display tree
+        and prints it.
         """
         self.create_lb_tree()
 
@@ -181,14 +168,13 @@ class LoadBalancerInfo:
 
 class AmphoraInfo(LoadBalancerInfo):
     """
-    Provides information about Amphorae associated with an OpenStack Load Balancer.
+    Retrieves and displays Amphora information for a Load Balancer.
 
-    This class extends the LoadBalancerInfo class and adds functionality to retrieve
-    and display information about Amphorae associated with an OpenStack
-    Load Balancer.
+    This class extends LoadBalancerInfo to provide specific functionality for
+    displaying information about Amphorae associated with a Load Balancer.
 
     Class Attributes:
-        images_name (dict): A dictionary to cache image names for Amphorae.
+        images_name (dict): A class-level cache for image names.
     """
 
     images_name = {}
@@ -203,10 +189,8 @@ class AmphoraInfo(LoadBalancerInfo):
         Note:
             The retrieved image names are stored in the 'images_name' class attribute
             for future reference, avoiding redundant queries to the OpenStack.
-
-        Returns:
-            None
         """
+        # Checks the cache before making an API call
         new_img_ids = [i for i in image_ids if i not in AmphoraInfo.images_name]
         if new_img_ids:
             with self.formatter.status(f"Getting image details [b]{new_img_ids}[/b]"):
@@ -223,9 +207,6 @@ class AmphoraInfo(LoadBalancerInfo):
         Args:
             amphora (openstack.load_balancer.v2.amphora.Amphora): The amphora for which
                 to display detailed information.
-
-        Returns:
-            None
         """
         # Get image name for the image ID
         self.get_images_name([amphora.image_id])
@@ -241,12 +222,12 @@ class AmphoraInfo(LoadBalancerInfo):
 
     def display_amp_info(self):
         """
-        Display information about amphorae associated with a load balancer.
+        Fetch and display information about amphorae associated with a load balancer.
 
-        Returns:
-            None
+        This is the main entry point for this class. It builds the display tree
+        and prints it.
         """
-        self.lb_tree = self.create_lb_tree()
+        self.create_lb_tree()
 
         with self.formatter.status(
             f"Getting amphora details for load balancer [b]{self.lb.id}[/b]"

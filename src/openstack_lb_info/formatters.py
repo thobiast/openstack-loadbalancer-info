@@ -45,76 +45,85 @@ class OutputFormatter(ABC):
 
     @abstractmethod
     def rule(self, title, align="center"):
-        """Print a rule with a title."""
+        """Print a horizontal rule with a title."""
 
     @abstractmethod
     def format_status(self, status):
-        """Format status text."""
+        """Format a status string (e.g., 'ACTIVE') for display."""
 
     @abstractmethod
     def add_details_to_tree(self, tree, details_dict):
-        """Adds all attributes from an object to the tree."""
+        """Add a dictionary of detailed attributes to a tree node."""
 
     @abstractmethod
     def add_empty_node(self, tree, resource_name):
-        """Adds a placeholder for a missing resource."""
+        """Add a placeholder node for a resource that was not found."""
 
     @abstractmethod
     def add_lb_to_tree(self, lb):
-        """Create and return the root tree for the Load Balancer."""
+        """Create and return the root tree for a Load Balancer."""
 
     @abstractmethod
     def add_listener_to_tree(self, parent_tree, listener):
-        """Adds a formatted listener node to the tree."""
+        """Add a formatted listener node to a parent tree."""
 
     @abstractmethod
     def add_pool_to_tree(self, parent_tree, pool):
-        """Adds a formatted pool node to the tree."""
+        """Add a formatted pool node to a parent tree."""
 
     @abstractmethod
     def add_health_monitor_to_tree(self, parent_tree, hm):
-        """Adds a formatted health monitor node to the tree."""
+        """Add a formatted health monitor node to a parent tree."""
 
     @abstractmethod
     def add_member_to_tree(self, parent_tree, member):
-        """Adds a formatted member node to the tree."""
+        """Add a formatted member node to a parent tree."""
 
     @abstractmethod
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
-        """Adds a formatted amphora node to the tree."""
+        """Add a formatted amphora node to a parent tree."""
 
 
 class RichOutputFormatter(OutputFormatter):
     """Formatter using the Rich library."""
 
     def __init__(self):
+        """Initialize the Rich console and highlighter."""
         self.console = Console()
         self.highlighter = ReprHighlighter()
 
     def _create_tree(self, name):
+        """Create a Rich Tree instance."""
         return Tree(name)
 
     def _add_to_tree(self, tree, content, highlight=False):
+        """Add a node to a Rich Tree."""
         if highlight:
             content = self.highlighter(content)
         return tree.add(content)
 
     def print_tree(self, tree):
+        """Print a Rich Tree to the console."""
         self.console.print(tree)
 
     def print(self, message):
+        """Print a message using the Rich console."""
         self.console.print(message)
 
     def status(self, message):
+        """Display a status indicator using the Rich console."""
         return self.console.status(message)
 
     def line(self):
+        """Print a line using the Rich console."""
         self.console.line()
 
     def rule(self, title, align="center"):
+        """Print a Rich rule to the console."""
         self.console.rule(title, align=align)
 
     def format_status(self, status):
+        """Format a status string with appropriate colors."""
         status_colors = {
             "ACTIVE": "green",
             "ONLINE": "green",
@@ -124,15 +133,18 @@ class RichOutputFormatter(OutputFormatter):
         return f"[{color}]{status}[/{color}]"
 
     def add_details_to_tree(self, tree, details_dict):
+        """Add highlighted key-value pairs to the tree."""
         for attr in sorted(details_dict):
             value = details_dict[attr]
             content = f"{attr}: {value}"
             self._add_to_tree(tree, content, highlight=True)
 
     def add_empty_node(self, tree, resource_name):
+        """Add a styled placeholder for a missing resource."""
         self._add_to_tree(tree, f"[b green]{resource_name}:[/] None")
 
     def add_lb_to_tree(self, lb):
+        """Create a styled root tree node for the Load Balancer."""
         message = (
             f"LB:[bright_yellow] {lb.id}[/] "
             f"vip:[bright_cyan]{lb.vip_address}[/] "
@@ -143,6 +155,7 @@ class RichOutputFormatter(OutputFormatter):
         return self._create_tree(message)
 
     def add_listener_to_tree(self, parent_tree, listener):
+        """Add a styled listener node to the tree."""
         message = (
             f"[b green]Listener:[/] [b white]{listener.id}[/] "
             f"([blue b]{listener.name}[/]) "
@@ -153,6 +166,7 @@ class RichOutputFormatter(OutputFormatter):
         return self._add_to_tree(parent_tree, message)
 
     def add_pool_to_tree(self, parent_tree, pool):
+        """Add a styled pool node to the tree."""
         message = (
             f"[b green]Pool:[/] [b white]{pool.id}[/] "
             f"protocol:[magenta]{pool.protocol}[/magenta] "
@@ -163,6 +177,7 @@ class RichOutputFormatter(OutputFormatter):
         return self._add_to_tree(parent_tree, message)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
+        """Add a styled health monitor node to the tree."""
         message = (
             f"[b green]Health Monitor:[/] [b white]{hm.id}[/] "
             f"type:[magenta]{hm.type}[/magenta] "
@@ -175,6 +190,7 @@ class RichOutputFormatter(OutputFormatter):
         return self._add_to_tree(parent_tree, message)
 
     def add_member_to_tree(self, parent_tree, member):
+        """Add a styled member node to the tree."""
         message = (
             f"[b green]Member:[/] [b white]{member.id}[/] "
             f"IP:[magenta]{member.address}[/magenta] "
@@ -187,6 +203,7 @@ class RichOutputFormatter(OutputFormatter):
         return self._add_to_tree(parent_tree, message)
 
     def add_amphora_to_tree(self, parent_tree, amphora, server, image_name):
+        """Add a styled amphora node to the tree."""
         server_id = server.id if server else "N/A"
         server_flavor_name = server.flavor.name if server and server.flavor else "N/A"
         server_compute_host = server.compute_host if server else "N/A"

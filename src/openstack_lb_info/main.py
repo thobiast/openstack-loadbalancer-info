@@ -120,7 +120,7 @@ def parse_parameters():
 
     if len(sys.argv) < 2:
         parser.print_help()
-        sys.exit(1)
+        sys.exit(0)
 
     args = parser.parse_args()
 
@@ -213,7 +213,7 @@ def query_openstack_lbs(openstackapi, args, formatter):
         if v is not None
     }
 
-    with formatter.status("Quering load balancers..."):
+    with formatter.status("Querying load balancers..."):
         filtered_lbs_tmp = openstackapi.retrieve_load_balancers(filter_criteria)
 
     # Perform name filtering here rather than adding it to filter_criteria
@@ -257,9 +257,6 @@ def main():
 
     args = parse_parameters()
 
-    # Create an instance of OpenStackAPI
-    openstackapi = OpenStackAPI()
-
     if args.output_format == "rich" and not RICH_AVAILABLE:
         sys.exit(
             "Error: 'rich' library is not installed. "
@@ -268,6 +265,9 @@ def main():
 
     # Initialize the formatter
     formatter = get_formatter(args.output_format)
+
+    # Create an instance of OpenStackAPI
+    openstackapi = OpenStackAPI()
 
     filtered_lbs = query_openstack_lbs(openstackapi, args, formatter)
 
