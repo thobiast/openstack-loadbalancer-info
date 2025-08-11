@@ -41,7 +41,7 @@ from .formatters import (
     PlainOutputFormatter,
     RichOutputFormatter,
 )
-from .loadbalancer_info import AmphoraInfo, LoadBalancerInfo
+from .loadbalancer_info import AmphoraInfo, LoadBalancerInfo, ProcessingContext
 from .openstack_api import OpenStackAPI
 
 
@@ -115,6 +115,13 @@ def parse_parameters():
         "--details",
         help="Show all load balancers/amphora details",
         action="store_true",
+        required=False,
+    )
+    parser.add_argument(
+        "--max-workers",
+        help="Max number of concurrent threads to fetch members details (default: %(default)s)",
+        type=int,
+        default=4,
         required=False,
     )
 
@@ -275,12 +282,19 @@ def main():
         formatter.print("No load balancer(s) found.")
         sys.exit(1)
 
+    context = ProcessingContext(
+        openstack_api=openstackapi,
+        details=args.details,
+        max_workers=args.max_workers,
+        formatter=formatter,
+    )
+
     for lb in filtered_lbs:
         if args.type == "amphora":
-            amphora_info = AmphoraInfo(openstackapi, lb, args.details, formatter)
+            amphora_info = AmphoraInfo(lb, context)
             amphora_info.display_amp_info()
         else:
-            lb_info = LoadBalancerInfo(openstackapi, lb, args.details, formatter)
+            lb_info = LoadBalancerInfo(lb, context)
             lb_info.display_lb_info()
 
 

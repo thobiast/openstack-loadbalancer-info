@@ -16,6 +16,29 @@ Classes:
 - `AmphoraInfo`: Extends `LoadBalancerInfo` to focus on retrieving and displaying information
   about the amphorae associated with a Load Balancer.
 """
+import concurrent.futures
+from dataclasses import dataclass
+
+from .formatters import OutputFormatter
+from .openstack_api import OpenStackAPI
+
+
+@dataclass
+class ProcessingContext:
+    """
+    Holds shared objects and configuration used during load balancer processing.
+
+    Attributes:
+        openstack_api (OpenStackAPI): An instance of `OpenStackAPI` for OpenStack interactions.
+        details (bool): If True, displays detailed attributes of the Load Balancer.
+        formatter (OutputFormatter): An instance of a formatter class for output formatting.
+        max_workers (int): Max number of concurrent threads to fetch members details.
+    """
+
+    openstack_api: OpenStackAPI
+    details: bool
+    max_workers: int
+    formatter: OutputFormatter
 
 
 class LoadBalancerInfo:
@@ -23,20 +46,19 @@ class LoadBalancerInfo:
     Retrieves and displays information for a single OpenStack Load Balancer.
     """
 
-    def __init__(self, openstack_api, lb, details, formatter):
+    def __init__(self, lb, context):
         """
         Initialize a LoadBalancerInfo instance.
 
         Args:
-            openstack_api (OpenStackAPI): An instance of `OpenStackAPI` for OpenStack interactions.
             lb (openstack.load_balancer.v2.load_balancer.LoadBalancer): The Load Balancer object.
-            details (bool): If True, displays detailed attributes of the Load Balancer.
-            formatter (OutputFormatter): An instance of a formatter class for output formatting.
+            context (ProcessingContext): A instance of ProcessingContext class.
         """
         self.lb = lb
-        self.details = details
-        self.formatter = formatter
-        self.openstack_api = openstack_api
+        self.details = context.details
+        self.formatter = context.formatter
+        self.openstack_api = context.openstack_api
+        self.max_workers = context.max_workers
         # The root of the display tree for the formatter
         self.lb_tree = None
 
@@ -131,17 +153,39 @@ class LoadBalancerInfo:
             pool_members (list): A list of dictionaries containing Member information,
                 where each dictionary includes the Member's ID and additional details.
         """
-        for member in pool_members:
-            member_id = member["id"]
-            with self.formatter.status(f"Getting member details id [b]{member_id}[/b]"):
-                member = self.openstack_api.retrieve_member(member_id, pool_id)
+        # Avoid spinning up extra idle threads
+        max_workers = min(self.max_workers, len(pool_members))
 
-            if member:
-                member_tree = self.formatter.add_member_to_tree(pool_tree, member)
-                if self.details:
-                    self.formatter.add_details_to_tree(member_tree, member.to_dict())
-            else:
-                self.formatter.add_empty_node(pool_tree, f"Member ({member_id})")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Create future for each member IDs
+            futures_to_member_id = {
+                executor.submit(self.openstack_api.retrieve_member, member["id"], pool_id): member[
+                    "id"
+                ]
+                for member in pool_members
+            }
+
+            # Use the formatter's progress bar to track completion
+            description = f"Getting members information for pool id: {pool_id}"
+
+            progress_iterator = self.formatter.track_progress(
+                sequence=concurrent.futures.as_completed(futures_to_member_id),
+                description=description,
+                total=len(futures_to_member_id),
+            )
+
+            for future in progress_iterator:
+                member_id = futures_to_member_id[future]
+                try:
+                    member = future.result()
+                    if member:
+                        member_tree = self.formatter.add_member_to_tree(pool_tree, member)
+                        if self.details:
+                            self.formatter.add_details_to_tree(member_tree, member.to_dict())
+                    else:
+                        self.formatter.add_empty_node(pool_tree, f"Member ({member_id})")
+                except Exception as exc:  # pylint: disable=broad-exception-caught
+                    self.formatter.add_empty_node(pool_tree, f"Member ({member_id} - Error: {exc})")
 
     def display_lb_info(self):
         """

@@ -15,6 +15,7 @@ import re
 from abc import ABC, abstractmethod
 
 try:
+    from rich import progress
     from rich.console import Console
     from rich.highlighter import ReprHighlighter
     from rich.tree import Tree
@@ -38,6 +39,15 @@ class OutputFormatter(ABC):
     @abstractmethod
     def status(self, message):
         """Display a status message."""
+
+    @abstractmethod
+    def track_progress(self, sequence, description, total):
+        """
+        Track progress of an iterable.
+
+        Yields:
+            The items from the sequence.
+        """
 
     @abstractmethod
     def line(self):
@@ -113,6 +123,29 @@ class RichOutputFormatter(OutputFormatter):
     def status(self, message):
         """Display a status indicator using the Rich console."""
         return self.console.status(message)
+
+    def track_progress(self, sequence, description, total=None):
+        """Track progress with a customized Rich progress bar."""
+        progress_bar = progress.Progress(
+            progress.TextColumn("[progress.description]{task.description}"),
+            progress.BarColumn(),
+            progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            progress.TextColumn("({task.completed} of {task.total})"),
+            progress.TimeRemainingColumn(),
+            console=self.console,
+        )
+
+        if total is None:
+            try:
+                total = len(sequence)
+            except TypeError:
+                total = None
+
+        with progress_bar:
+            task_id = progress_bar.add_task(description, total=total)
+            for item in sequence:
+                progress_bar.update(task_id, advance=1)
+                yield item
 
     def line(self):
         """Print a line using the Rich console."""
@@ -253,6 +286,10 @@ class PlainOutputFormatter(OutputFormatter):
 
         return plain_status()
 
+    def track_progress(self, sequence, description, total=None):
+        print(f"[STATUS] {description}...")
+        return sequence
+
     def line(self):
         print()
 
@@ -358,6 +395,9 @@ class JSONOutputFormatter(OutputFormatter):
 
     def status(self, message):
         return contextlib.nullcontext()
+
+    def track_progress(self, sequence, description, total=None):
+        return sequence
 
     def line(self):
         pass
