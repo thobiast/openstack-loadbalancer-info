@@ -43,7 +43,7 @@ and optional details. If no amphoras match the filter criteria, it will indicate
 $ usage: openstack-lb-info [-h] [-o {plain,rich,json}] -t {lb,amphora} [--name NAME] [--id ID]
                            [--tags TAGS] [--flavor-id FLAVOR_ID] [--vip-address VIP_ADDRESS]
                            [--availability-zone AVAILABILITY_ZONE] [--vip-network-id VIP_NETWORK_ID]
-                           [--vip-subnet-id VIP_SUBNET_ID] [--details]
+                           [--vip-subnet-id VIP_SUBNET_ID] [--details] [--max-workers MAX_WORKERS]
 
 A script to show OpenStack load balancers information.
 
@@ -54,19 +54,21 @@ options:
   -t {lb,amphora}, --type {lb,amphora}
                         Show information about load balancers or amphoras
   --name NAME           Filter load balancers name
-  --id ID               Filter load balancers id
+  --id ID               Filter load balancers id (UUID)
   --tags TAGS           Filter load balancers tags
   --flavor-id FLAVOR_ID
-                        Filter load balancers flavor id
+                        Filter load balancers flavor id (UUID)
   --vip-address VIP_ADDRESS
                         Filter load balancers VIP address
   --availability-zone AVAILABILITY_ZONE
                         Filter load balancers AZ
   --vip-network-id VIP_NETWORK_ID
-                        Filter load balancers network id
+                        Filter load balancers network id (UUID)
   --vip-subnet-id VIP_SUBNET_ID
-                        Filter load balancers subnet id
+                        Filter load balancers subnet id (UUID)
   --details             Show all load balancers/amphora details
+  --max-workers MAX_WORKERS
+                        Max number of concurrent threads to fetch members details (1-32). (default: 4)
 
     Example of use:
         openstack-lb-info
