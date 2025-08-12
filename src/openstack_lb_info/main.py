@@ -3,7 +3,7 @@
 """
 A Python script to display OpenStack Load Balancer details.
 
-This script query an OpenStack environment to present detailed information
+This script queries an OpenStack environment to present detailed information
 about load balancers, including their components such as listeners, pools,
 health monitors, members, and amphorae. It connects to an OpenStack
 environment using the OpenStack SDK and presents the information in a
@@ -43,6 +43,9 @@ from .formatters import (
 )
 from .loadbalancer_info import AmphoraInfo, LoadBalancerInfo, ProcessingContext
 from .openstack_api import OpenStackAPI
+
+# Max allowed threads for --max-workers
+MAX_WORKERS_LIMIT = 32
 
 
 ###########################################################################
@@ -85,15 +88,20 @@ def parse_parameters():
         required=True,
     )
     parser.add_argument("--name", help="Filter load balancers name", type=str, required=False)
-    parser.add_argument("--id", help="Filter load balancers id", type=str, required=False)
+    parser.add_argument(
+        "--id", help="Filter load balancers id (UUID)", type=validate_uuid, required=False
+    )
     parser.add_argument("--tags", help="Filter load balancers tags", type=str, required=False)
     parser.add_argument(
-        "--flavor-id", help="Filter load balancers flavor id", type=str, required=False
+        "--flavor-id",
+        help="Filter load balancers flavor id (UUID)",
+        type=validate_uuid,
+        required=False,
     )
     parser.add_argument(
         "--vip-address",
         help="Filter load balancers VIP address",
-        type=str,
+        type=validate_ip_address,
         required=False,
     )
     parser.add_argument(
@@ -101,14 +109,14 @@ def parse_parameters():
     )
     parser.add_argument(
         "--vip-network-id",
-        help="Filter load balancers network id",
-        type=str,
+        help="Filter load balancers network id (UUID)",
+        type=validate_uuid,
         required=False,
     )
     parser.add_argument(
         "--vip-subnet-id",
-        help="Filter load balancers subnet id",
-        type=str,
+        help="Filter load balancers subnet id (UUID)",
+        type=validate_uuid,
         required=False,
     )
     parser.add_argument(
@@ -119,8 +127,11 @@ def parse_parameters():
     )
     parser.add_argument(
         "--max-workers",
-        help="Max number of concurrent threads to fetch members details (default: %(default)s)",
-        type=int,
+        help=(
+            f"Max number of concurrent threads to fetch members details "
+            f"(1-{MAX_WORKERS_LIMIT}). (default: %(default)s)"
+        ),
+        type=validate_int_range(1, MAX_WORKERS_LIMIT),
         default=4,
         required=False,
     )
@@ -131,65 +142,73 @@ def parse_parameters():
 
     args = parser.parse_args()
 
-    validate_arguments(args)
-
     return args
 
 
-def validate_arguments(args):
+def validate_int_range(min_val, max_val):
     """
-    Validate command-line arguments.
+    Argparse type function that validates integer input within a given range.
 
     Args:
-        args (argparse.Namespace): Parsed command-line arguments.
+        min_val (int): Minimum allowed integer value (inclusive).
+        max_val (int): Maximum allowed integer value (inclusive).
 
     Raises:
-        SystemExit: If any validation fails, the script exits.
+        argparse.ArgumentTypeError: If the string cannot be converted to an integer
+                                    or if the value is out of range.
     """
-    # Validate UUIDs parameters
-    uuid_args = ["id", "vip_network_id", "vip_subnet_id", "flavor_id"]
-    for arg_name in uuid_args:
-        arg_value = getattr(args, arg_name)
-        if arg_value and not is_valid_uuid(arg_value):
-            sys.exit(f"Error: Invalid {arg_name.replace('_', '-')} format. Expected a UUID.")
 
-    # Validate IP address
-    if args.vip_address and not is_valid_ip_address(args.vip_address):
-        sys.exit("Error: Invalid VIP address format. Expected a valid IP address.")
+    def _check_value(value_str):
+        try:
+            value = int(value_str)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"Invalid integer: '{value_str!r}'") from exc
+
+        if value < min_val or value > max_val:
+            raise argparse.ArgumentTypeError(f"Value must be between {min_val} and {max_val}")
+        return value
+
+    return _check_value
 
 
-def is_valid_uuid(uuid_str):
+def validate_uuid(value_str):
     """
-    Check if uuid_str parameter is a valid UUID.
+    Argparse type function that checks whether a string is a valid UUID.
 
     Args:
-        uuid_str (str): The value to check.
+        value_str (str): The value to validate.
 
     Returns:
-        bool: True if valid UUID, False otherwise.
+        str: The UUID string if valid.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not a valid UUID.
     """
     try:
-        uuid.UUID(str(uuid_str))
-        return True
-    except ValueError:
-        return False
+        uuid.UUID(str(value_str))
+        return value_str
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid UUID: {value_str!r}") from exc
 
 
-def is_valid_ip_address(address):
+def validate_ip_address(value_str):
     """
-    Check if the address parameter is a valid IP address.
+    Argparse type function that checks whether a string is a valid IP address.
 
     Args:
-        address (str): The IP address to validate.
+        value_str (str): The IP address to validate.
 
     Returns:
-        bool: True if valid IP address, False otherwise.
+        str: The string if it is a valid IPv4/IPv6 address.
+
+    Raises:
+        argparse.ArgumentTypeError: If the string is not valid IP address.
     """
     try:
-        ipaddress.ip_address(address)
-        return True
-    except ValueError:
-        return False
+        ipaddress.ip_address(value_str)
+        return value_str
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"Invalid IP address: {value_str!r}") from exc
 
 
 def query_openstack_lbs(openstackapi, args, formatter):
