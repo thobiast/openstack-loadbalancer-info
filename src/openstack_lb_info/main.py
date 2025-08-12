@@ -239,15 +239,15 @@ def query_openstack_lbs(openstackapi, args, formatter):
         if v is not None
     }
 
-    with formatter.status("Querying load balancers..."):
+    with formatter.status("Querying load balancers and applying filters..."):
         filtered_lbs_tmp = openstackapi.retrieve_load_balancers(filter_criteria)
 
-    # Perform name filtering here rather than adding it to filter_criteria
-    # because this allows for partial matching of the lb name
-    if args.name:
-        filtered_lbs = [lb for lb in filtered_lbs_tmp if args.name in lb.name]
-    else:
-        filtered_lbs = list(filtered_lbs_tmp)
+        # Perform name filtering here rather than adding it to filter_criteria
+        # because this allows for partial matching of the lb name
+        if args.name:
+            filtered_lbs = [lb for lb in filtered_lbs_tmp if args.name in lb.name]
+        else:
+            filtered_lbs = list(filtered_lbs_tmp)
 
     return filtered_lbs
 
