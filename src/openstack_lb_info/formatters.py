@@ -133,6 +133,7 @@ class RichOutputFormatter(OutputFormatter):
             progress.TextColumn("({task.completed} of {task.total})"),
             progress.TimeRemainingColumn(),
             console=self.console,
+            transient=True,
         )
 
         if total is None:
