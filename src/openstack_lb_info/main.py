@@ -32,6 +32,7 @@ $ openstack-lb-info --help
 
 import argparse
 import ipaddress
+import logging
 import sys
 import uuid
 
@@ -43,6 +44,8 @@ from .formatters import (
 )
 from .loadbalancer_info import AmphoraInfo, LoadBalancerInfo, ProcessingContext
 from .openstack_api import OpenStackAPI
+
+log = logging.getLogger(__name__)
 
 # Max allowed threads for --max-workers
 MAX_WORKERS_LIMIT = 32
@@ -73,11 +76,20 @@ def parse_parameters():
     )
 
     parser.add_argument(
-        "-o",
-        "--output-format",
-        help="Output format: 'plain', 'rich' or 'json'",
-        choices=("plain", "rich", "json"),
-        default="rich",
+        "-d",
+        "--debug",
+        help="Enable debug log messages. (default: %(default)s)",
+        action="store_true",
+        required=False,
+    )
+    parser.add_argument(
+        "--os-cloud",
+        help=(
+            "Name of the cloud to load from clouds.yaml. "
+            "(Default '%(default)s', which uses OS_* env vars)"
+        ),
+        type=str,
+        default="envvars",
         required=False,
     )
     parser.add_argument(
@@ -86,6 +98,14 @@ def parse_parameters():
         help="Show information about load balancers or amphoras",
         choices=("lb", "amphora"),
         required=True,
+    )
+    parser.add_argument(
+        "-o",
+        "--output-format",
+        help="Output format. (default: %(default)s)",
+        choices=("plain", "rich", "json"),
+        default="rich",
+        required=False,
     )
     parser.add_argument("--name", help="Filter load balancers name", type=str, required=False)
     parser.add_argument(
@@ -121,7 +141,13 @@ def parse_parameters():
     )
     parser.add_argument(
         "--details",
-        help="Show all load balancers/amphora details",
+        help="Show all load balancers/amphora details. (default: %(default)s)",
+        action="store_true",
+        required=False,
+    )
+    parser.add_argument(
+        "--no-members",
+        help="Do not show load balancers pool members information. (default: %(default)s)",
         action="store_true",
         required=False,
     )
@@ -211,6 +237,23 @@ def validate_ip_address(value_str):
         raise argparse.ArgumentTypeError(f"Invalid IP address: {value_str!r}") from exc
 
 
+def setup_logging(log_level):
+    """Setup logging configuration."""
+    datefmt = "%Y-%m-%d %H:%M:%S"
+    msg_fmt = "%(asctime)s - %(module)s.%(funcName)s - [%(levelname)s] - %(message)s"
+
+    formatter = logging.Formatter(
+        fmt=msg_fmt,
+        datefmt=datefmt,
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(handler)
+
+
 def query_openstack_lbs(openstackapi, args, formatter):
     """
     Query OpenStack Load Balancers based on user-defined filters.
@@ -238,6 +281,7 @@ def query_openstack_lbs(openstackapi, args, formatter):
         }.items()
         if v is not None
     }
+    log.debug("Retrieve load balancers filter: %s", filter_criteria)
 
     with formatter.status("Querying load balancers and applying filters..."):
         filtered_lbs_tmp = openstackapi.retrieve_load_balancers(filter_criteria)
@@ -283,6 +327,10 @@ def main():
 
     args = parse_parameters()
 
+    log_level = logging.DEBUG if args.debug else logging.WARNING
+    setup_logging(log_level)
+    log.debug("CMD line args: %s", args)
+
     if args.output_format == "rich" and not RICH_AVAILABLE:
         sys.exit(
             "Error: 'rich' library is not installed. "
@@ -293,9 +341,18 @@ def main():
     formatter = get_formatter(args.output_format)
 
     # Create an instance of OpenStackAPI
-    openstackapi = OpenStackAPI()
+    try:
+        openstackapi = OpenStackAPI(args.os_cloud)
+    except RuntimeError as exc:
+        sys.exit(f"Error: {exc}")
 
-    filtered_lbs = query_openstack_lbs(openstackapi, args, formatter)
+    try:
+        filtered_lbs = query_openstack_lbs(openstackapi, args, formatter)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        log.debug("Error to query openstack:", exc_info=True)
+        sys.exit(f"Error: {exc}")
+
+    log.info("Found %d load balancer(s) to process.", len(filtered_lbs))
 
     if not filtered_lbs:
         formatter.print("No load balancer(s) found.")
@@ -305,8 +362,10 @@ def main():
         openstack_api=openstackapi,
         details=args.details,
         max_workers=args.max_workers,
+        no_members=args.no_members,
         formatter=formatter,
     )
+    log.debug("Process context: %s", context)
 
     for lb in filtered_lbs:
         if args.type == "amphora":

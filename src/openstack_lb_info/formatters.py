@@ -206,7 +206,8 @@ class RichOutputFormatter(OutputFormatter):
             f"protocol:[magenta]{pool.protocol}[/magenta] "
             f"algorithm:[magenta]{pool.lb_algorithm}[/magenta] "
             f"prov_status:{self.format_status(pool.provisioning_status)} "
-            f"oper_status:{self.format_status(pool.operating_status)}"
+            f"oper_status:{self.format_status(pool.operating_status)} "
+            f"number_members:[cyan]{len(pool.members)}[/]"
         )
         return self._add_to_tree(parent_tree, message)
 
@@ -336,7 +337,8 @@ class PlainOutputFormatter(OutputFormatter):
             f"protocol:{pool.protocol} "
             f"algorithm:{pool.lb_algorithm} "
             f"prov_status:{self.format_status(pool.provisioning_status)} "
-            f"oper_status:{self.format_status(pool.operating_status)}"
+            f"oper_status:{self.format_status(pool.operating_status)} "
+            f"number_members:{len(pool.members)}"
         )
         return self._add_to_tree(parent_tree, message)
 
