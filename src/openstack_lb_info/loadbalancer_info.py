@@ -33,11 +33,13 @@ class ProcessingContext:
         details (bool): If True, displays detailed attributes of the Load Balancer.
         formatter (OutputFormatter): An instance of a formatter class for output formatting.
         max_workers (int): Max number of concurrent threads to fetch members details.
+        no_members (bool): Do not show load balancer pool members information.
     """
 
     openstack_api: OpenStackAPI
     details: bool
     max_workers: int
+    no_members: bool
     formatter: OutputFormatter
 
 
@@ -59,6 +61,7 @@ class LoadBalancerInfo:
         self.formatter = context.formatter
         self.openstack_api = context.openstack_api
         self.max_workers = context.max_workers
+        self.no_members = context.no_members
         # The root of the display tree for the formatter
         self.lb_tree = None
 
@@ -118,10 +121,11 @@ class LoadBalancerInfo:
             else:
                 self.formatter.add_empty_node(pool_tree, "Health Monitor")
 
-            if pool.members:
-                self.add_pool_members(pool_tree, pool.id, pool.members)
-            else:
-                self.formatter.add_empty_node(pool_tree, "Member")
+            if not self.no_members:
+                if pool.members:
+                    self.add_pool_members(pool_tree, pool.id, pool.members)
+                else:
+                    self.formatter.add_empty_node(pool_tree, "Member")
         else:
             self.formatter.add_empty_node(listener_tree, "Pool")
 

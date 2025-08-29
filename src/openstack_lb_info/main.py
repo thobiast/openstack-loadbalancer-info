@@ -73,19 +73,19 @@ def parse_parameters():
     )
 
     parser.add_argument(
-        "-o",
-        "--output-format",
-        help="Output format: 'plain', 'rich' or 'json'",
-        choices=("plain", "rich", "json"),
-        default="rich",
-        required=False,
-    )
-    parser.add_argument(
         "-t",
         "--type",
         help="Show information about load balancers or amphoras",
         choices=("lb", "amphora"),
         required=True,
+    )
+    parser.add_argument(
+        "-o",
+        "--output-format",
+        help="Output format. (default: %(default)s)",
+        choices=("plain", "rich", "json"),
+        default="rich",
+        required=False,
     )
     parser.add_argument("--name", help="Filter load balancers name", type=str, required=False)
     parser.add_argument(
@@ -121,7 +121,13 @@ def parse_parameters():
     )
     parser.add_argument(
         "--details",
-        help="Show all load balancers/amphora details",
+        help="Show all load balancers/amphora details. (default: %(default)s)",
+        action="store_true",
+        required=False,
+    )
+    parser.add_argument(
+        "--no-members",
+        help="Do not show load balancers pool members information. (default: %(default)s)",
         action="store_true",
         required=False,
     )
@@ -305,6 +311,7 @@ def main():
         openstack_api=openstackapi,
         details=args.details,
         max_workers=args.max_workers,
+        no_members=args.no_members,
         formatter=formatter,
     )
 
