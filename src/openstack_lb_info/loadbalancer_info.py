@@ -17,10 +17,13 @@ Classes:
   about the amphorae associated with a Load Balancer.
 """
 import concurrent.futures
+import logging
 from dataclasses import dataclass
 
 from .formatters import OutputFormatter
 from .openstack_api import OpenStackAPI
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -64,6 +67,7 @@ class LoadBalancerInfo:
         self.no_members = context.no_members
         # The root of the display tree for the formatter
         self.lb_tree = None
+        log.info("Processing info for Load Balancer ID: %s (Name: %s)", self.lb.id, self.lb.name)
 
     def create_lb_tree(self):
         """
@@ -159,6 +163,12 @@ class LoadBalancerInfo:
         """
         # Avoid spinning up extra idle threads
         max_workers = min(self.max_workers, len(pool_members))
+        log.debug(
+            "Using %s workers to fetch details of %s members (pool_id=%s)",
+            max_workers,
+            len(pool_members),
+            pool_id,
+        )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Create future for each member IDs
@@ -210,6 +220,7 @@ class LoadBalancerInfo:
             f"[b]Loadbalancer ID: {self.lb.id} [bright_blue]({self.lb.name})[/]",
             align="center",
         )
+        log.info("Displaying final tree for Load Balancer ID: %s", self.lb.id)
         self.formatter.print_tree(self.lb_tree)
         self.formatter.print("")
 

@@ -9,7 +9,11 @@ to the OpenStack environment and offers methods to retrieve information about lo
 listeners, pools, health monitors, members, amphorae, servers, and images.
 """
 
+import logging
+
 import openstack
+
+log = logging.getLogger(__name__)
 
 
 class OpenStackAPI:
@@ -41,6 +45,7 @@ class OpenStackAPI:
                 filter criteria, or an empty list if no load balancers match the
                 criteria.
         """
+        log.debug("Retrieving load balancers with filters: %s", filter_criteria)
         filtered_lbs = self.os_conn.load_balancer.load_balancers(**filter_criteria)
         return filtered_lbs
 
@@ -56,6 +61,7 @@ class OpenStackAPI:
                 listener object representing the listener with the specified ID, or
                 None if the listener is not found.
         """
+        log.debug("Retrieving listener with ID: %s", listener_id)
         return self.os_conn.load_balancer.find_listener(listener_id)
 
     def retrieve_pool(self, pool_id):
@@ -70,6 +76,7 @@ class OpenStackAPI:
                 representing the pool with the specified ID, or None if the pool is
                 not found.
         """
+        log.debug("Retrieving pool with ID: %s", pool_id)
         return self.os_conn.load_balancer.find_pool(pool_id)
 
     def retrieve_health_monitor(self, health_monitor_id):
@@ -84,6 +91,7 @@ class OpenStackAPI:
                 balancer health monitor object representing the health monitor with the
                 specified ID, or None if the health monitor is not found.
         """
+        log.debug("Retrieving health monitor with ID: %s", health_monitor_id)
         return self.os_conn.load_balancer.find_health_monitor(health_monitor_id)
 
     def retrieve_member(self, member_id, pool_id):
@@ -99,6 +107,7 @@ class OpenStackAPI:
                 object representing the member with the specified ID and associated
                 pool, or None if the member is not found.
         """
+        log.debug("Retrieving member with ID: %s from pool ID: %s", member_id, pool_id)
         return self.os_conn.load_balancer.find_member(member_id, pool_id)
 
     def retrieve_amphoraes(self, loadbalancer_id):
@@ -114,6 +123,7 @@ class OpenStackAPI:
                 OpenStack amphora objects representing the amphorae associated with
                 the specified load balancer.
         """
+        log.debug("Retrieving amphoraes from LB ID: %s", loadbalancer_id)
         return self.os_conn.load_balancer.amphorae(loadbalancer_id=loadbalancer_id)
 
     def retrieve_server(self, server_id):
@@ -128,6 +138,7 @@ class OpenStackAPI:
             openstack.compute.v2.server.Server: An OpenStack server object representing
             the specified server.
         """
+        log.debug("Retrieving compute server with ID: %s", server_id)
         return self.os_conn.compute.find_server(server_id)
 
     def retrieve_images(self, image_ids):
@@ -141,6 +152,7 @@ class OpenStackAPI:
         Returns:
             list: A list of OpenStack image objects representing the specified images.
         """
+        log.debug("Retrieving image with IDs: %s", image_ids)
         return self.os_conn.image.images(id=image_ids)
 
 
