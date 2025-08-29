@@ -83,6 +83,16 @@ def parse_parameters():
         required=False,
     )
     parser.add_argument(
+        "--os-cloud",
+        help=(
+            "Name of the cloud to load from clouds.yaml. "
+            "(Default '%(default)s', which uses OS_* env vars)"
+        ),
+        type=str,
+        default="envvars",
+        required=False,
+    )
+    parser.add_argument(
         "-t",
         "--type",
         help="Show information about load balancers or amphoras",
@@ -331,9 +341,17 @@ def main():
     formatter = get_formatter(args.output_format)
 
     # Create an instance of OpenStackAPI
-    openstackapi = OpenStackAPI()
+    try:
+        openstackapi = OpenStackAPI(args.os_cloud)
+    except RuntimeError as exc:
+        sys.exit(f"Error: {exc}")
 
-    filtered_lbs = query_openstack_lbs(openstackapi, args, formatter)
+    try:
+        filtered_lbs = query_openstack_lbs(openstackapi, args, formatter)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        log.debug("Error to query openstack:", exc_info=True)
+        sys.exit(f"Error: {exc}")
+
     log.info("Found %d load balancer(s) to process.", len(filtered_lbs))
 
     if not filtered_lbs:

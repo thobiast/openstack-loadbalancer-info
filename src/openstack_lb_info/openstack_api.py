@@ -21,15 +21,22 @@ class OpenStackAPI:
     Provides an interface for querying OpenStack load balancer resources.
     """
 
-    def __init__(self, debug=False):
+    def __init__(self, os_cloud, debug=False):
         """
         Initialize the OpenStackAPI instance and establish a connection.
 
         Args:
-            debug (bool): Whether to enable debug logging.
+            debug    (bool): Whether to enable debug logging.
+            os_cloud  (str): The name of the configuration to load from clouds.yaml.
+                             If 'envvars', it loads config from environment variables
         """
+        log.debug("Create openstack connect to cloud: '%s'", os_cloud)
         openstack.enable_logging(debug=debug)
-        self.os_conn = openstack.connect()
+        try:
+            self.os_conn = openstack.connect(cloud=os_cloud)
+        except Exception as exc:
+            log.debug("Openstack connection configuration failed:", exc_info=True)
+            raise RuntimeError(f"Failed to connect to OpenStack: {exc}") from exc
 
     def retrieve_load_balancers(self, filter_criteria):
         """
