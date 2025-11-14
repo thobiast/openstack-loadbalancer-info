@@ -117,6 +117,20 @@ class OpenStackAPI:
         log.debug("Retrieving health monitor with ID: %s", health_monitor_id)
         return self.os_conn.load_balancer.find_health_monitor(health_monitor_id)
 
+    def retrieve_l7_policy(self, l7_policy_id):
+        """
+        Retrieve details of an L7 Policy.
+
+        Args:
+            l7_policy_id (str): The ID of the L7 Policy to retrieve.
+
+        Returns:
+            openstack.load_balancer.v2.l7_policy.L7Policy | None:
+                The L7 Policy object if found, otherwise None.
+        """
+        log.debug("Retrieving L7 Policy with ID: %s", l7_policy_id)
+        return self.os_conn.load_balancer.find_l7_policy(l7_policy_id)
+
     def retrieve_member(self, member_id, pool_id):
         """
         Retrieve details of an load balancer member by its ID and associated pool.
