@@ -86,6 +86,22 @@ class OpenStackAPI:
         log.debug("Retrieving pool with ID: %s", pool_id)
         return self.os_conn.load_balancer.find_pool(pool_id)
 
+    def retrieve_pools(self, loadbalancer_id):
+        """
+        Retrieve pools associated with an OpenStack load balancer.
+
+        Args:
+            loadbalancer_id (str): The ID of the load balancer for which pools are
+                to be retrieved.
+
+        Returns:
+            Generator[openstack.load_balancer.v2.pool.Pool]: A generator of OpenStack
+                pool objects representing the pools associated with the specified
+                load balancer.
+        """
+        log.debug("Retrieving pools for load balancer ID: %s", loadbalancer_id)
+        return self.os_conn.load_balancer.pools(loadbalancer_id=loadbalancer_id)
+
     def retrieve_health_monitor(self, health_monitor_id):
         """
         Retrieve details of an OpenStack load balancer health monitor.

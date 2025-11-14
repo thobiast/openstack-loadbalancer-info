@@ -195,7 +195,8 @@ class RichOutputFormatter(OutputFormatter):
             f"([blue b]{listener.name}[/]) "
             f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
             f"prov_status:{self.format_status(listener.provisioning_status)} "
-            f"oper_status:{self.format_status(listener.operating_status)}"
+            f"oper_status:{self.format_status(listener.operating_status)} "
+            f"default_pool_id:[b white]{listener.default_pool_id}[/]"
         )
         return self._add_to_tree(parent_tree, message)
 
