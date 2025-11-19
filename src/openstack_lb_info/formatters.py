@@ -86,6 +86,10 @@ class OutputFormatter(ABC):
         """Add a formatted L7 Policy node to a parent tree."""
 
     @abstractmethod
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        """Add a formatted L7 Rule node to a parent tree."""
+
+    @abstractmethod
     def add_health_monitor_to_tree(self, parent_tree, hm):
         """Add a formatted health monitor node to a parent tree."""
 
@@ -233,6 +237,20 @@ class RichOutputFormatter(OutputFormatter):
                 message += f" {attr}:{value}"
         return self._add_to_tree(parent_tree, message)
 
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        """Add a styled L7 Rule node to the tree."""
+        message = (
+            f"[b green]L7 Rule:[/] [b white]{l7rule.id}[/] "
+            f"compare_type:[magenta]{l7rule.compare_type}[/magenta] "
+            f"invert:[magenta]{l7rule.invert}[/magenta] "
+            f"key:[magenta]{l7rule.key}[/magenta] "
+            f"type:[magenta]{l7rule.type}[/magenta] "
+            f"rule_value:[magenta]{l7rule.rule_value}[/magenta] "
+            f"prov_status:{self.format_status(l7rule.provisioning_status)} "
+            f"oper_status:{self.format_status(l7rule.operating_status)}"
+        )
+        return self._add_to_tree(parent_tree, message)
+
     def add_health_monitor_to_tree(self, parent_tree, hm):
         """Add a styled health monitor node to the tree."""
         message = (
@@ -368,6 +386,19 @@ class PlainOutputFormatter(OutputFormatter):
         message = f"L7 Policy: {l7policy.id} "
         return self._add_to_tree(parent_tree, message)
 
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        message = (
+            f"L7 Rule: {l7rule.id} "
+            f"compare_type:{l7rule.compare_type} "
+            f"invert:{l7rule.invert} "
+            f"key:{l7rule.key} "
+            f"type:{l7rule.type} "
+            f"rule_value:{l7rule.rule_value} "
+            f"prov_status:{self.format_status(l7rule.provisioning_status)} "
+            f"oper_status:{self.format_status(l7rule.operating_status)}"
+        )
+        return self._add_to_tree(parent_tree, message)
+
     def add_health_monitor_to_tree(self, parent_tree, hm):
         message = (
             f"Health Monitor: {hm.id} "
@@ -465,6 +496,9 @@ class JSONOutputFormatter(OutputFormatter):
 
     def add_l7policy_to_tree(self, parent_tree, l7policy):
         return self._add_node_from_obj(parent_tree, "l7policy", l7policy)
+
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        return self._add_node_from_obj(parent_tree, "l7rule", l7rule)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
         return self._add_node_from_obj(parent_tree, "health_monitor", hm)

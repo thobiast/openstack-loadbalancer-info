@@ -127,6 +127,34 @@ class LoadBalancerInfo:
             if self.details:
                 self.formatter.add_details_to_tree(l7_tree, l7policy.to_dict())
 
+            self.add_l7rules_info(l7_tree, l7policy)
+
+    def add_l7rules_info(self, l7_tree, l7policy):
+        """
+        Add information about the L7 Rules to the L7 Policy's tree.
+
+        Args:
+            l7_tree (object): The tree representing the l7 policy.
+            l7policy (openstack.load_balancer.v2.l7_policy.L7Policy): The L7 Policy
+                for which to retrieve and display the rules.
+        """
+        rule_ids = [rule["id"] for rule in l7policy.rules if "id" in rule]
+        if not rule_ids:
+            self.formatter.add_empty_node(l7_tree, "L7 Rule")
+            return
+
+        for rule_id in rule_ids:
+            with self.formatter.status(f"Getting L7 Rule details id [b]{rule_id}[/b]"):
+                l7rule = self.openstack_api.retrieve_l7_rule(rule_id, l7policy.id)
+
+                if not l7rule:
+                    self.formatter.add_empty_node(l7_tree, f"L7 Rule ({rule_id})")
+                    continue
+
+                l7rule_tree = self.formatter.add_l7rule_to_tree(l7_tree, l7rule)
+                if self.details:
+                    self.formatter.add_details_to_tree(l7rule_tree, l7rule.to_dict())
+
     def add_pool_info(self, listener_tree, pool_id):
         """
         Add information about the Pool to the listener's tree.

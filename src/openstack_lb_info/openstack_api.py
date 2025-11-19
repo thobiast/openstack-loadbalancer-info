@@ -131,6 +131,26 @@ class OpenStackAPI:
         log.debug("Retrieving L7 Policy with ID: %s", l7_policy_id)
         return self.os_conn.load_balancer.find_l7_policy(l7_policy_id)
 
+    def retrieve_l7_rule(self, l7_rule_id, l7_policy_id, ignore_missing=True):
+        """
+        Retrieve details of an L7 Rule.
+
+        Args:
+            l7_rule_id (str): The ID of the L7 Rule to retrieve.
+            l7_policy_id (str): The ID of the L7 Policy that the l7rule belongs to.
+            ignore_missing (bool, optional): If True, returns None if the l7rule
+                is not found. If False, raises an exception if the rule
+                does not exist. Defaults to True.
+
+        Returns:
+            openstack.load_balancer.v2.l7_rule.L7Rule | None:
+                The L7 Rule object if found, otherwise None.
+        """
+        log.debug("Retrieving L7 Rule %s for L7 Policy %s", l7_rule_id, l7_policy_id)
+        return self.os_conn.load_balancer.find_l7_rule(
+            l7_rule_id, l7_policy_id, ignore_missing=ignore_missing
+        )
+
     def retrieve_member(self, member_id, pool_id):
         """
         Retrieve details of an load balancer member by its ID and associated pool.
