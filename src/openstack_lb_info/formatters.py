@@ -82,6 +82,14 @@ class OutputFormatter(ABC):
         """Add a formatted pool node to a parent tree."""
 
     @abstractmethod
+    def add_l7policy_to_tree(self, parent_tree, l7policy):
+        """Add a formatted L7 Policy node to a parent tree."""
+
+    @abstractmethod
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        """Add a formatted L7 Rule node to a parent tree."""
+
+    @abstractmethod
     def add_health_monitor_to_tree(self, parent_tree, hm):
         """Add a formatted health monitor node to a parent tree."""
 
@@ -195,7 +203,8 @@ class RichOutputFormatter(OutputFormatter):
             f"([blue b]{listener.name}[/]) "
             f"port:[cyan]{listener.protocol}/{listener.protocol_port}[/] "
             f"prov_status:{self.format_status(listener.provisioning_status)} "
-            f"oper_status:{self.format_status(listener.operating_status)}"
+            f"oper_status:{self.format_status(listener.operating_status)} "
+            f"default_pool_id:[b white]{listener.default_pool_id}[/]"
         )
         return self._add_to_tree(parent_tree, message)
 
@@ -208,6 +217,37 @@ class RichOutputFormatter(OutputFormatter):
             f"prov_status:{self.format_status(pool.provisioning_status)} "
             f"oper_status:{self.format_status(pool.operating_status)} "
             f"number_members:[cyan]{len(pool.members)}[/]"
+        )
+        return self._add_to_tree(parent_tree, message)
+
+    def add_l7policy_to_tree(self, parent_tree, l7policy):
+        """Add a styled L7 Policy node to the tree."""
+        message = (
+            f"[b green]L7 Policy:[/] [b white]{l7policy.id}[/] "
+            f"([blue b]{l7policy.name}[/]) "
+            f"position:[magenta]{l7policy.position}[/magenta] "
+            f"action:[magenta]{l7policy.action}[/magenta] "
+            f"prov_status:{self.format_status(l7policy.provisioning_status)} "
+            f"oper_status:{self.format_status(l7policy.operating_status)}"
+        )
+        redir_attrs = ["redirect_pool_id", "redirect_prefix", "redirect_url"]
+        for attr in redir_attrs:
+            value = getattr(l7policy, attr, None)
+            if value is not None:
+                message += f" {attr}:{value}"
+        return self._add_to_tree(parent_tree, message)
+
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        """Add a styled L7 Rule node to the tree."""
+        message = (
+            f"[b green]L7 Rule:[/] [b white]{l7rule.id}[/] "
+            f"compare_type:[magenta]{l7rule.compare_type}[/magenta] "
+            f"invert:[magenta]{l7rule.invert}[/magenta] "
+            f"key:[magenta]{l7rule.key}[/magenta] "
+            f"type:[magenta]{l7rule.type}[/magenta] "
+            f"rule_value:[magenta]{l7rule.rule_value}[/magenta] "
+            f"prov_status:{self.format_status(l7rule.provisioning_status)} "
+            f"oper_status:{self.format_status(l7rule.operating_status)}"
         )
         return self._add_to_tree(parent_tree, message)
 
@@ -342,6 +382,23 @@ class PlainOutputFormatter(OutputFormatter):
         )
         return self._add_to_tree(parent_tree, message)
 
+    def add_l7policy_to_tree(self, parent_tree, l7policy):
+        message = f"L7 Policy: {l7policy.id} "
+        return self._add_to_tree(parent_tree, message)
+
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        message = (
+            f"L7 Rule: {l7rule.id} "
+            f"compare_type:{l7rule.compare_type} "
+            f"invert:{l7rule.invert} "
+            f"key:{l7rule.key} "
+            f"type:{l7rule.type} "
+            f"rule_value:{l7rule.rule_value} "
+            f"prov_status:{self.format_status(l7rule.provisioning_status)} "
+            f"oper_status:{self.format_status(l7rule.operating_status)}"
+        )
+        return self._add_to_tree(parent_tree, message)
+
     def add_health_monitor_to_tree(self, parent_tree, hm):
         message = (
             f"Health Monitor: {hm.id} "
@@ -436,6 +493,12 @@ class JSONOutputFormatter(OutputFormatter):
 
     def add_pool_to_tree(self, parent_tree, pool):
         return self._add_node_from_obj(parent_tree, "pool", pool)
+
+    def add_l7policy_to_tree(self, parent_tree, l7policy):
+        return self._add_node_from_obj(parent_tree, "l7policy", l7policy)
+
+    def add_l7rule_to_tree(self, parent_tree, l7rule):
+        return self._add_node_from_obj(parent_tree, "l7rule", l7rule)
 
     def add_health_monitor_to_tree(self, parent_tree, hm):
         return self._add_node_from_obj(parent_tree, "health_monitor", hm)

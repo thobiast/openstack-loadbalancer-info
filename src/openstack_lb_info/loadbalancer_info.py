@@ -80,7 +80,7 @@ class LoadBalancerInfo:
         if self.details:
             self.formatter.add_details_to_tree(self.lb_tree, self.lb.to_dict())
 
-    def add_listener_info(self, lb_tree, listener_id):
+    def add_listener_info(self, lb_tree, listener_id, listener_pool_ids):
         """
         Add information about the Listener to the Load Balancer's tree.
 
@@ -88,6 +88,8 @@ class LoadBalancerInfo:
             lb_tree (object): The root tree node for the load balancer.
             listener_id (str): The ID of the Listener for which to retrieve and display
                 information.
+            listener_pool_ids (set[str]): A set of pool IDs associated with this
+                listener.
         """
         with self.formatter.status(f"Getting Listener details id [b]{listener_id}[/b]"):
             listener = self.openstack_api.retrieve_listener(listener_id)
@@ -97,12 +99,61 @@ class LoadBalancerInfo:
             if self.details:
                 self.formatter.add_details_to_tree(listener_tree, listener.to_dict())
 
-            if listener.default_pool_id:
-                self.add_pool_info(listener_tree, listener.default_pool_id)
+            if listener.l7_policies:
+                for l7policy in listener.l7_policies:
+                    self.add_l7policy_info(listener_tree, l7policy["id"])
             else:
-                self.formatter.add_empty_node(listener_tree, "Pool")
+                self.formatter.add_empty_node(listener_tree, "L7 Policy")
+
+            for pool_id in listener_pool_ids:
+                self.add_pool_info(listener_tree, pool_id)
         else:
             self.formatter.add_empty_node(lb_tree, "Listener")
+
+    def add_l7policy_info(self, listener_tree, l7policy_id):
+        """
+        Add information about the L7 Policy to the listener's tree.
+
+        Args:
+            listener_tree (object): The tree representing the listener.
+            l7policy_id (str): The ID of the L7 Policy for which to retrieve and display.
+        """
+        with self.formatter.status(f"Getting L7 Policy details id [b]{l7policy_id}[/b]"):
+            l7policy = self.openstack_api.retrieve_l7_policy(l7policy_id)
+
+        if l7policy:
+            l7_tree = self.formatter.add_l7policy_to_tree(listener_tree, l7policy)
+
+            if self.details:
+                self.formatter.add_details_to_tree(l7_tree, l7policy.to_dict())
+
+            self.add_l7rules_info(l7_tree, l7policy)
+
+    def add_l7rules_info(self, l7_tree, l7policy):
+        """
+        Add information about the L7 Rules to the L7 Policy's tree.
+
+        Args:
+            l7_tree (object): The tree representing the l7 policy.
+            l7policy (openstack.load_balancer.v2.l7_policy.L7Policy): The L7 Policy
+                for which to retrieve and display the rules.
+        """
+        rule_ids = [rule["id"] for rule in l7policy.rules if "id" in rule]
+        if not rule_ids:
+            self.formatter.add_empty_node(l7_tree, "L7 Rule")
+            return
+
+        for rule_id in rule_ids:
+            with self.formatter.status(f"Getting L7 Rule details id [b]{rule_id}[/b]"):
+                l7rule = self.openstack_api.retrieve_l7_rule(rule_id, l7policy.id)
+
+                if not l7rule:
+                    self.formatter.add_empty_node(l7_tree, f"L7 Rule ({rule_id})")
+                    continue
+
+                l7rule_tree = self.formatter.add_l7rule_to_tree(l7_tree, l7rule)
+                if self.details:
+                    self.formatter.add_details_to_tree(l7rule_tree, l7rule.to_dict())
 
     def add_pool_info(self, listener_tree, pool_id):
         """
@@ -213,8 +264,16 @@ class LoadBalancerInfo:
         if not self.lb.listeners:
             self.formatter.add_empty_node(self.lb_tree, "Listener")
         else:
+            # Get all pools associated with this load balancer
+            lb_pools = list(self.openstack_api.retrieve_pools(loadbalancer_id=self.lb.id))
             for listener in self.lb.listeners:
-                self.add_listener_info(self.lb_tree, listener["id"])
+                # Filter the ids of the pools attached to this specific listener
+                listener_pool_ids = {
+                    pool.id
+                    for pool in lb_pools
+                    if any(lstn.get("id") == listener["id"] for lstn in (pool.listeners or []))
+                }
+                self.add_listener_info(self.lb_tree, listener["id"], listener_pool_ids)
 
         self.formatter.rule(
             f"[b]Loadbalancer ID: {self.lb.id} [bright_blue]({self.lb.name})[/]",

@@ -8,7 +8,7 @@ openstack-lb-info - A command-line tool for displaying OpenStack Load Balancer r
 
 # About
 
-This Python script is designed to interact with an OpenStack cloud infrastructure and retrieve information about
+This Python script interacts with an OpenStack cloud infrastructure and retrieve information about
 load balancers and their components such as listeners, pools, health monitors, members, and amphorae.
 It displays the information in a visually appealing and user-friendly way and provide a clear representation
 of the load balancer resources.
@@ -37,10 +37,11 @@ about amphoras associated with load balancers. Amphoras are responsible for hand
 information includes amphora IDs, roles, status, load balancer network IP addresses, associated images, server information,
 and optional details. If no amphoras match the filter criteria, it will indicate that no amphoras were found.
 
-## Example
+## CLI Options
 
 ```bash
-$ usage: openstack-lb-info [-h] [-d] [--os-cloud OS_CLOUD] -t {lb,amphora}
+$ openstack-lb-info --help
+usage: openstack-lb-info [-h] [-d] [--os-cloud OS_CLOUD] -t {lb,amphora}
                          [-o {plain,rich,json}] [--name NAME] [--id ID]
                          [--tags TAGS] [--flavor-id FLAVOR_ID]
                          [--vip-address VIP_ADDRESS]
@@ -87,31 +88,44 @@ options:
         openstack-lb-info --type amphora --id load_balancer_id --details
 
 ```
+
+## Example
+
 ![example](img/example.png)
 
 ## Authentication Methods
 
 ##### Environment Variables
-You can manually set the required environment variables or use an OpenStack RC file to simplify the process.
+You can manually set the required environment variables or source an OpenStack RC file.
 
 ##### clouds.yaml Configuration
-Alternatively, you can use a *clouds.yaml* and export "*OS_CLOUD*" variable to pass the cloud name.
+Alternatively, you can use a *clouds.yaml* and export "*OS_CLOUD*" environment variable to pass the cloud name,
+or specify it directly using the `--os-cloud` option.
 
 For more information: https://docs.openstack.org/python-openstackclient/latest/cli/man/openstack.html
 
 ## Installation
 
-Clone or download the repository to your local machine.
+Install from PyPI:
 
-#### Development mode using pip
 ```bash
-$ pip install -e .
+pip install openstack-lb-info
+```
+Or, clone the repository and install from source in development mode:
+
+```bash
+git clone https://github.com/thobiast/openstack-loadbalancer-info.git
+cd openstack-loadbalancer-info
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+You can also use **pipx** to install it in an isolated environment automatically:
+
+```bash
+pipx install -e .
 ```
 
-#### Development mode using pipx
-```bash
-$ pipx install -e .
-```
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

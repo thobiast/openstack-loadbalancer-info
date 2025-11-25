@@ -2,7 +2,8 @@
 name = "openstack-lb-info"
 description = "A script to display OpenStack Load Balancer resource details."
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 dynamic = ["version", "dependencies"]
 requires-python = ">=3.7"
 authors = [
