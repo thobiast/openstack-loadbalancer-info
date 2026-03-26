@@ -83,6 +83,13 @@ def parse_parameters():
         required=False,
     )
     parser.add_argument(
+        "--insecure",
+        action="store_false",
+        dest="verify",
+        default=True,
+        help="Disable SSL certificate verification (insecure)",
+    )
+    parser.add_argument(
         "--os-cloud",
         help=(
             "Name of the cloud to load from clouds.yaml. "
@@ -342,7 +349,7 @@ def main():
 
     # Create an instance of OpenStackAPI
     try:
-        openstackapi = OpenStackAPI(args.os_cloud)
+        openstackapi = OpenStackAPI(args.os_cloud, verify=args.verify)
     except RuntimeError as exc:
         sys.exit(f"Error: {exc}")
 
